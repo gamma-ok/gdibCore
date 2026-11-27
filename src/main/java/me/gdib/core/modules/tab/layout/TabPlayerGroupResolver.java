@@ -1,12 +1,17 @@
 package me.gdib.core.modules.tab.layout;
 
+import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 
 import org.bukkit.entity.Player;
 
 import me.gdib.core.modules.tab.layout.model.TabLayoutGroup;
+import me.gdib.core.modules.tab.layout.model.TabPlayerGroupAssignment;
 
 public final class TabPlayerGroupResolver {
+
+    private static final String DEFAULT_GROUP = "_DEFAULT_";
 
     private final TabLayoutManager layoutManager;
     private final TabPlayerGroupAssignmentManager assignmentManager;
@@ -27,77 +32,69 @@ public final class TabPlayerGroupResolver {
     }
 
     public TabLayoutGroup resolve(Player player) {
+
         Objects.requireNonNull(
                 player,
                 "Player cannot be null"
         );
 
-        // 1. Check for a manual group assignment.
-        String assignedGroup = assignmentManager.getAssignedGroup(
-                player.getUniqueId()
-        );
+        UUID playerId = player.getUniqueId();
 
-        if (assignedGroup != null) {
-            TabLayoutGroup manualGroup =
-                    layoutManager.getGroup(assignedGroup);
+        // 1. Manual group assignment has the highest priority.
+        TabPlayerGroupAssignment manualAssignment =
+                assignmentManager.getAssignment(playerId);
 
-            if (manualGroup != null) {
-                return manualGroup;
+        if (manualAssignment != null) {
+
+            TabLayoutGroup assignedGroup = layoutManager.getGroup(
+                    manualAssignment.getGroupName()
+            );
+
+            if (assignedGroup != null) {
+                return assignedGroup;
             }
         }
 
-        // 2. Resolve the group using player permissions.
+        // 2. Find the highest-priority matching group.
         TabLayoutGroup selectedGroup = null;
 
-        for (TabLayoutGroup group :
-                layoutManager.getGroups().values()) {
+        for (Map.Entry<String, TabLayoutGroup> entry :
+                layoutManager.getGroups().entrySet()) {
 
-            if (!matches(player, group)) {
+            TabLayoutGroup group = entry.getValue();
+
+            // The default group is only a fallback.
+            if (group.getName().equalsIgnoreCase(DEFAULT_GROUP)) {
+                continue;
+            }
+
+            String permission = group.getPermission();
+
+            // Groups without a permission match every player.
+            boolean matches = permission == null
+                    || permission.isBlank()
+                    || player.hasPermission(permission);
+
+            if (!matches) {
                 continue;
             }
 
             if (selectedGroup == null
                     || group.getPriority() > selectedGroup.getPriority()) {
+
                 selectedGroup = group;
             }
         }
 
-        return selectedGroup;
-    }
-
-    private boolean matches(
-            Player player,
-            TabLayoutGroup group
-    ) {
-        if (!group.hasPermission()) {
-            return true;
+        if (selectedGroup != null) {
+            return selectedGroup;
         }
 
-        return player.hasPermission(group.getPermission());
+        // 3. Use the default group when no other group matches.
+        return layoutManager.getGroup(DEFAULT_GROUP);
     }
 
-    public boolean belongsToGroup(
-            Player player,
-            String groupName
-    ) {
-        if (player == null || groupName == null) {
-            return false;
-        }
-
-        TabLayoutGroup group = resolve(player);
-
-        return group != null
-                && group.getName().equalsIgnoreCase(groupName);
-    }
-
-    public boolean hasGroup(Player player) {
-        return player != null && resolve(player) != null;
-    }
-
-    public boolean hasManualAssignment(Player player) {
-        return player != null
-                && assignmentManager.hasAssignment(
-                        player.getUniqueId()
-                );
+    public boolean hasResolvedGroup(Player player) {
+        return resolve(player) != null;
     }
 }

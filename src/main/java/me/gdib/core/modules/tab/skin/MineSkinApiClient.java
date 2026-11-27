@@ -1,149 +1,103 @@
 package me.gdib.core.modules.tab.skin;
 
-import java.io.IOException;
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 
+import com.google.gson.JsonObject;
+
 public final class MineSkinApiClient {
 
-    private static final String API_URL =
-            "https://api.mineskin.org/v2";
+	private static final String API_URL = "https://api.mineskin.org/v2";
 
-    private static final String USER_AGENT =
-            "gdibCore/0.0.1";
+	private static final String USER_AGENT = "gdibCore/0.0.1";
 
-    private final HttpClient httpClient;
+	private final HttpClient httpClient;
 
-    public MineSkinApiClient() {
-        this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(10))
-                .build();
-    }
+	public MineSkinApiClient() {
 
-    public CompletableFuture<String> submitSkinGeneration(
-            String skinUrl,
-            String apiKey
-    ) {
-        Objects.requireNonNull(
-                skinUrl,
-                "Skin URL cannot be null"
-        );
+		this.httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
+	}
 
-        String normalizedUrl = skinUrl.trim();
+	public CompletableFuture<String> submitSkinGeneration(String skinUrl, String apiKey) {
 
-        if (normalizedUrl.isEmpty()) {
-            throw new IllegalArgumentException(
-                    "Skin URL cannot be empty."
-            );
-        }
+		Objects.requireNonNull(skinUrl, "Skin URL cannot be null");
 
-        String requestBody = "{"
-                + "\"url\":\"" + escapeJson(normalizedUrl) + "\","
-                + "\"variant\":\"unknown\","
-                + "\"visibility\":\"unlisted\""
-                + "}";
+		String normalizedUrl = skinUrl.trim();
 
-        HttpRequest.Builder builder = HttpRequest.newBuilder()
-                .uri(URI.create(API_URL + "/queue"))
-                .timeout(Duration.ofSeconds(30))
-                .header("User-Agent", USER_AGENT)
-                .header("Content-Type", "application/json")
-                .header("Accept", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(requestBody));
+		if (normalizedUrl.isEmpty()) {
+			throw new IllegalArgumentException("Skin URL cannot be empty.");
+		}
 
-        addAuthorization(builder, apiKey);
+		// Build request JSON safely using Gson.
+		JsonObject requestBody = new JsonObject();
 
-        return sendRequest(builder.build());
-    }
+		requestBody.addProperty("url", normalizedUrl);
+		requestBody.addProperty("variant", "unknown");
+		requestBody.addProperty("visibility", "unlisted");
 
-    public CompletableFuture<String> getJobStatus(
-            String jobId,
-            String apiKey
-    ) {
-        Objects.requireNonNull(
-                jobId,
-                "MineSkin job ID cannot be null"
-        );
+		HttpRequest.Builder builder = HttpRequest.newBuilder().uri(URI.create(API_URL + "/queue"))
+				.timeout(Duration.ofSeconds(30)).header("User-Agent", USER_AGENT)
+				.header("Content-Type", "application/json").header("Accept", "application/json")
+				.POST(HttpRequest.BodyPublishers.ofString(requestBody.toString(), StandardCharsets.UTF_8));
 
-        String normalizedJobId = jobId.trim();
+		addAuthorization(builder, apiKey);
 
-        if (normalizedJobId.isEmpty()) {
-            throw new IllegalArgumentException(
-                    "MineSkin job ID cannot be empty."
-            );
-        }
+		return sendRequest(builder.build());
+	}
 
-        String encodedJobId = java.net.URLEncoder
-                .encode(
-                        normalizedJobId,
-                        java.nio.charset.StandardCharsets.UTF_8
-                )
-                .replace("+", "%20");
+	public CompletableFuture<String> getJobStatus(String jobId, String apiKey) {
 
-        HttpRequest.Builder builder = HttpRequest.newBuilder()
-                .uri(URI.create(
-                        API_URL + "/queue/" + encodedJobId
-                ))
-                .timeout(Duration.ofSeconds(30))
-                .header("User-Agent", USER_AGENT)
-                .header("Accept", "application/json")
-                .GET();
+		Objects.requireNonNull(jobId, "MineSkin job ID cannot be null");
 
-        addAuthorization(builder, apiKey);
+		String normalizedJobId = jobId.trim();
 
-        return sendRequest(builder.build());
-    }
+		if (normalizedJobId.isEmpty()) {
+			throw new IllegalArgumentException("MineSkin job ID cannot be empty.");
+		}
 
-    private void addAuthorization(
-            HttpRequest.Builder builder,
-            String apiKey
-    ) {
-        if (apiKey != null && !apiKey.isBlank()) {
-            builder.header(
-                    "Authorization",
-                    "Bearer " + apiKey.trim()
-            );
-        }
-    }
+		String encodedJobId = URLEncoder.encode(normalizedJobId, StandardCharsets.UTF_8).replace("+", "%20");
 
-    private CompletableFuture<String> sendRequest(
-            HttpRequest request
-    ) {
-        return httpClient.sendAsync(
-                request,
-                HttpResponse.BodyHandlers.ofString()
-        ).thenApply(response -> {
+		HttpRequest.Builder builder = HttpRequest.newBuilder().uri(URI.create(API_URL + "/queue/" + encodedJobId))
+				.timeout(Duration.ofSeconds(30)).header("User-Agent", USER_AGENT).header("Accept", "application/json")
+				.GET();
 
-            int statusCode = response.statusCode();
+		addAuthorization(builder, apiKey);
 
-            if (statusCode < 200 || statusCode >= 300) {
-                throw new MineSkinApiException(
-                        statusCode,
-                        response.body()
-                );
-            }
+		return sendRequest(builder.build());
+	}
 
-            return response.body();
-        });
-    }
+	private void addAuthorization(HttpRequest.Builder builder, String apiKey) {
 
-    private String escapeJson(String value) {
-        return value
-                .replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\b", "\\b")
-                .replace("\f", "\\f")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r")
-                .replace("\t", "\\t");
-    }
+		if (apiKey != null && !apiKey.isBlank()) {
 
-    public void shutdown() {
-        httpClient.close();
-    }
+			builder.header("Authorization", "Bearer " + apiKey.trim());
+		}
+	}
+
+	private CompletableFuture<String> sendRequest(HttpRequest request) {
+
+		return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8))
+				.thenApply(response -> {
+
+					int statusCode = response.statusCode();
+
+					if (statusCode < 200 || statusCode >= 300) {
+
+						throw new MineSkinApiException(statusCode, response.body());
+					}
+
+					return response.body();
+				});
+	}
+
+	public void shutdown() {
+		httpClient.close();
+	}
 }

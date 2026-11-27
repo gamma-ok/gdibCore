@@ -15,14 +15,14 @@ public final class TabLayoutEntry {
     private final Type type;
     private final UUID playerId;
     private final String text;
-    private final String texture;
+    private final TabSkinTexture texture;
 
     private TabLayoutEntry(
             int position,
             Type type,
             UUID playerId,
             String text,
-            String texture
+            TabSkinTexture texture
     ) {
         if (position < 1 || position > 80) {
             throw new IllegalArgumentException(
@@ -31,6 +31,7 @@ public final class TabLayoutEntry {
         }
 
         this.position = position;
+
         this.type = Objects.requireNonNull(
                 type,
                 "Entry type cannot be null"
@@ -45,6 +46,7 @@ public final class TabLayoutEntry {
 
     private void validate() {
         switch (type) {
+
             case PLAYER:
                 Objects.requireNonNull(
                         playerId,
@@ -61,11 +63,10 @@ public final class TabLayoutEntry {
                 break;
 
             case CUSTOM_HEAD:
-                if (texture == null || texture.isBlank()) {
-                    throw new IllegalArgumentException(
-                            "Custom head texture cannot be empty."
-                    );
-                }
+                Objects.requireNonNull(
+                        texture,
+                        "Custom head texture cannot be null"
+                );
                 break;
 
             default:
@@ -104,7 +105,7 @@ public final class TabLayoutEntry {
     public static TabLayoutEntry customHead(
             int position,
             String text,
-            String texture
+            TabSkinTexture texture
     ) {
         return new TabLayoutEntry(
                 position,
@@ -131,7 +132,7 @@ public final class TabLayoutEntry {
         return text;
     }
 
-    public String getTexture() {
+    public TabSkinTexture getTexture() {
         return texture;
     }
 
