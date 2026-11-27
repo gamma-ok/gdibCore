@@ -315,6 +315,16 @@ public final class ModuleManager {
 
 			exception.printStackTrace();
 		}
+
+		// Unregister module commands.
+		try {
+			moduleContext.unregisterCommands();
+
+		} catch (Exception exception) {
+			context.getPlugin().getLogger().severe("Failed to unregister commands for module: " + name);
+
+			exception.printStackTrace();
+		}
 	}
 
 	private void changeState(String name, ModuleState newState) {

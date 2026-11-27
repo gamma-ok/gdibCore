@@ -102,7 +102,7 @@ public class CommandManager implements CommandExecutor {
         CoreCommand coreCommand = commands.get(name);
 
         if (coreCommand == null) {
-            return false;
+            return true;
         }
 
         try {

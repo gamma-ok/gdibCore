@@ -7,10 +7,13 @@ import java.util.List;
 import java.util.function.Consumer;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.Locale;
 import org.bukkit.plugin.java.JavaPlugin;
 import me.gdib.core.common.config.ConfigManager;
 import me.gdib.core.common.event.EventBus;
 import me.gdib.core.common.scheduler.SchedulerManager;
+import me.gdib.core.common.command.CommandManager;
+import me.gdib.core.common.command.CoreCommand;
 
 public final class ModuleContext {
 
@@ -19,6 +22,7 @@ public final class ModuleContext {
 	private final ModuleConfig moduleConfig;
 	private final List<Runnable> eventUnsubscriptions;
 	private final Set<Integer> scheduledTasks;
+	private final Set<String> registeredCommands;
 
 	public ModuleContext(CoreContext coreContext, ModuleDescriptor descriptor) {
 
@@ -33,6 +37,8 @@ public final class ModuleContext {
 		this.eventUnsubscriptions = new ArrayList<>();
 
 		this.scheduledTasks = new HashSet<>();
+
+		this.registeredCommands = new HashSet<>();
 	}
 
 	public JavaPlugin getPlugin() {
@@ -156,5 +162,47 @@ public final class ModuleContext {
 
 	public int getScheduledTaskCount() {
 		return scheduledTasks.size();
+	}
+
+	public void registerCommand(CoreCommand command) {
+
+		if (command == null) {
+			throw new IllegalArgumentException("Command cannot be null.");
+		}
+
+		CommandManager commandManager = getService(CommandManager.class);
+
+		commandManager.registerCommand(command);
+
+		registeredCommands.add(command.getName().toLowerCase(Locale.ROOT));
+	}
+
+	public void unregisterCommand(String name) {
+
+		if (name == null || name.trim().isEmpty()) {
+			throw new IllegalArgumentException("Command name cannot be null or empty.");
+		}
+
+		String normalizedName = name.toLowerCase(Locale.ROOT);
+
+		if (registeredCommands.remove(normalizedName)) {
+
+			getService(CommandManager.class).unregisterCommand(normalizedName);
+		}
+	}
+
+	public void unregisterCommands() {
+
+		CommandManager commandManager = getService(CommandManager.class);
+
+		for (String commandName : registeredCommands) {
+			commandManager.unregisterCommand(commandName);
+		}
+
+		registeredCommands.clear();
+	}
+
+	public int getRegisteredCommandCount() {
+		return registeredCommands.size();
 	}
 }
