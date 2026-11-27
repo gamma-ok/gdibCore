@@ -1,0 +1,22 @@
+tab:
+  enabled: true
+
+header-footer:
+  enabled: true
+  designs:
+    default:
+      header:
+        - ""
+        - "&b&lGDIB NETWORK"
+        - "&7Welcome to our network!"
+        - ""
+      footer:
+        - ""
+        - "&7Online players: &a%online_players%"
+        - "&7play.gdib.net"
+        - ""
+
+layout:
+  enabled: false
+
+update-interval: 500

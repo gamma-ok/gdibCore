@@ -1,0 +1,9 @@
+# TAB animations
+#
+# Example:
+#
+# ServerName:
+#   change-interval: 1000
+#   texts:
+#     - "&b&lGDIB NETWORK"
+#     - "&f&lGDIB NETWORK"

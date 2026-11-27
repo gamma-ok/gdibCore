@@ -1,7 +1,6 @@
 name: gdibCore
 version: 0.0.1-SNAPSHOT
 main: me.gdib.core.CorePlugin
-author: GDIB
+author: gdib
 description: Core Plugin (All-in-One)
-
 load: POSTWORLD
