@@ -1,0 +1,12 @@
+# ==========================================
+#              gdibCore
+#          General Configuration
+# ==========================================
+
+settings:
+  # Enable additional debug messages.
+  debug: false
+
+messages:
+  # General prefix used by gdibCore.
+  prefix: "&b&lGD&f&lIB &8» &7"

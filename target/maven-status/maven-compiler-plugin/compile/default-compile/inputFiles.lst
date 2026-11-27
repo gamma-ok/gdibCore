@@ -1,5 +1,6 @@
 C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\common\animation\AnimationManager.java
 C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\common\config\ConfigManager.java
+C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\common\config\CoreConfig.java
 C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\common\cooldown\CooldownManager.java
 C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\common\event\EventBus.java
 C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\common\message\MessageManager.java
@@ -10,8 +11,12 @@ C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\common\storag
 C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\common\storage\StorageProvider.java
 C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\common\text\TextFormatter.java
 C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\CorePlugin.java
+C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\kernel\AbstractModule.java
 C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\kernel\CoreContext.java
+C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\kernel\event\ModuleStateChangeEvent.java
 C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\kernel\Module.java
+C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\kernel\ModuleConfig.java
+C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\kernel\ModuleContext.java
 C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\kernel\ModuleDescriptor.java
 C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\kernel\ModuleManager.java
 C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\kernel\ModuleState.java

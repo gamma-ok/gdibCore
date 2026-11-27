@@ -2,6 +2,8 @@ package me.gdib.core.common.config;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -18,6 +20,7 @@ public final class ConfigManager {
     private final Map<String, FileConfiguration> configurations;
 
     public ConfigManager(JavaPlugin plugin) {
+
         this.plugin = Objects.requireNonNull(
             plugin,
             "Plugin cannot be null"
@@ -34,7 +37,8 @@ public final class ConfigManager {
     }
 
     public FileConfiguration loadConfig(String fileName) {
-        validateFileName(fileName);
+
+        fileName = validateFileName(fileName);
 
         FileConfiguration existing = configurations.get(fileName);
 
@@ -45,26 +49,29 @@ public final class ConfigManager {
         File file = new File(dataFolder, fileName);
 
         if (!file.exists()) {
-            String resource = plugin.getResource(fileName) != null
-                ? fileName
-                : null;
 
-            if (resource != null) {
-                plugin.saveResource(resource, false);
-            } else {
-                try {
-                    if (!file.createNewFile()) {
-                        throw new IOException(
-                            "Could not create configuration file"
-                        );
-                    }
-                } catch (IOException exception) {
-                    throw new IllegalStateException(
-                        "Could not create config: " + fileName,
-                        exception
-                    );
+            createParentDirectories(file);
+
+            try (InputStream resource = plugin.getResource(fileName)) {
+
+                if (resource != null) {
+                    Files.copy(resource, file.toPath());
+                } else {
+                    Files.createFile(file.toPath());
                 }
+
+            } catch (IOException exception) {
+                throw new IllegalStateException(
+                    "Could not create config: " + fileName,
+                    exception
+                );
             }
+        }
+
+        if (!file.isFile()) {
+            throw new IllegalStateException(
+                "Configuration path is not a file: " + fileName
+            );
         }
 
         FileConfiguration configuration =
@@ -76,7 +83,8 @@ public final class ConfigManager {
     }
 
     public FileConfiguration getConfig(String fileName) {
-        validateFileName(fileName);
+
+        fileName = validateFileName(fileName);
 
         FileConfiguration configuration =
             configurations.get(fileName);
@@ -91,15 +99,18 @@ public final class ConfigManager {
     }
 
     public void saveConfig(String fileName) {
-        validateFileName(fileName);
 
-        FileConfiguration configuration =
-            getConfig(fileName);
+        fileName = validateFileName(fileName);
+
+        FileConfiguration configuration = getConfig(fileName);
 
         File file = new File(dataFolder, fileName);
 
+        createParentDirectories(file);
+
         try {
             configuration.save(file);
+
         } catch (IOException exception) {
             throw new IllegalStateException(
                 "Could not save config: " + fileName,
@@ -109,11 +120,12 @@ public final class ConfigManager {
     }
 
     public void reloadConfig(String fileName) {
-        validateFileName(fileName);
+
+        fileName = validateFileName(fileName);
 
         File file = new File(dataFolder, fileName);
 
-        if (!file.exists()) {
+        if (!file.isFile()) {
             throw new IllegalStateException(
                 "Configuration file does not exist: " + fileName
             );
@@ -126,19 +138,23 @@ public final class ConfigManager {
     }
 
     public void saveAll() {
+
         for (String fileName : configurations.keySet()) {
             saveConfig(fileName);
         }
     }
 
     public void reloadAll() {
+
         for (String fileName : configurations.keySet()) {
             reloadConfig(fileName);
         }
     }
 
     public void unloadConfig(String fileName) {
-        validateFileName(fileName);
+
+        fileName = validateFileName(fileName);
+
         configurations.remove(fileName);
     }
 
@@ -147,30 +163,93 @@ public final class ConfigManager {
     }
 
     public boolean isLoaded(String fileName) {
-        validateFileName(fileName);
+
+        fileName = validateFileName(fileName);
+
         return configurations.containsKey(fileName);
     }
 
-    private void validateFileName(String fileName) {
+    private String validateFileName(String fileName) {
+
         if (fileName == null || fileName.trim().isEmpty()) {
             throw new IllegalArgumentException(
                 "Configuration file name cannot be null or empty"
             );
         }
 
-        if (!fileName.toLowerCase().endsWith(".yml")) {
+        String normalized = fileName.trim();
+
+        if (!normalized.toLowerCase().endsWith(".yml")) {
             throw new IllegalArgumentException(
                 "Configuration file must have a .yml extension"
             );
         }
 
-        if (fileName.contains("/")
-                || fileName.contains("\\")
-                || fileName.equals(".yml")
-                || fileName.contains("..")) {
+        if (normalized.startsWith("/")
+                || normalized.contains("\\")
+                || normalized.contains(":")) {
 
             throw new IllegalArgumentException(
-                "Invalid configuration file name: " + fileName
+                "Invalid configuration file path: " + normalized
+            );
+        }
+
+        String[] segments = normalized.split("/", -1);
+
+        for (String segment : segments) {
+
+            if (segment.isEmpty()
+                    || segment.equals(".")
+                    || segment.equals("..")) {
+
+                throw new IllegalArgumentException(
+                    "Invalid configuration file path: " + normalized
+                );
+            }
+        }
+
+        try {
+
+            File baseDirectory = dataFolder.getCanonicalFile();
+            File targetFile = new File(dataFolder, normalized)
+                .getCanonicalFile();
+
+            if (!targetFile.toPath().startsWith(
+                    baseDirectory.toPath())) {
+
+                throw new IllegalArgumentException(
+                    "Configuration path is outside plugin directory"
+                );
+            }
+
+        } catch (IOException exception) {
+            throw new IllegalArgumentException(
+                "Could not validate configuration path: " + normalized,
+                exception
+            );
+        }
+
+        return normalized;
+    }
+
+    private void createParentDirectories(File file) {
+
+        File parent = file.getParentFile();
+
+        if (parent != null
+                && !parent.exists()
+                && !parent.mkdirs()) {
+
+            throw new IllegalStateException(
+                "Could not create configuration directory: "
+                + parent.getPath()
+            );
+        }
+
+        if (parent != null && !parent.isDirectory()) {
+            throw new IllegalStateException(
+                "Configuration parent is not a directory: "
+                + parent.getPath()
             );
         }
     }

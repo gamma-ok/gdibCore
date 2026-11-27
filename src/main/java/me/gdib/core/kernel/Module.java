@@ -2,24 +2,17 @@ package me.gdib.core.kernel;
 
 public interface Module {
 
-    /**
-     * Returns the unique name of the module.
-     */
-    String getName();
+    ModuleDescriptor getDescriptor();
 
-    /**
-     * Returns the module description.
-     */
-    String getDescription();
+    default String getName() {
+        return getDescriptor().getName();
+    }
 
-    /**
-     * Initializes and enables the module.
-     */
-    void onEnable() throws Exception;
+    default String getDescription() {
+        return getDescriptor().getDescription();
+    }
 
-    /**
-     * Disables the module and releases its resources.
-     */
-    void onDisable();
+    void onEnable(ModuleContext context) throws Exception;
 
+    void onDisable(ModuleContext context);
 }
