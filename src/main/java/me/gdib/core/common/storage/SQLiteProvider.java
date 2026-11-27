@@ -20,301 +20,248 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 public final class SQLiteProvider implements StorageProvider {
 
-    private final Path databasePath;
-    private final ExecutorService executor;
+	private final Path databasePath;
+	private final ExecutorService executor;
 
-    private Connection connection;
+	private Connection connection;
 
-    private volatile boolean closed;
+	private volatile boolean closed;
 
-    private CompletableFuture<Void> closeFuture;
+	private CompletableFuture<Void> closeFuture;
 
-    public SQLiteProvider(JavaPlugin plugin, String fileName) {
+	public SQLiteProvider(JavaPlugin plugin, String fileName) {
 
-        Objects.requireNonNull(plugin, "Plugin cannot be null");
+		Objects.requireNonNull(plugin, "Plugin cannot be null");
 
-        if (fileName == null || fileName.trim().isEmpty()) {
-            throw new IllegalArgumentException(
-                "SQLite file name cannot be empty"
-            );
-        }
+		if (fileName == null || fileName.trim().isEmpty()) {
+			throw new IllegalArgumentException("SQLite file name cannot be empty");
+		}
 
-        Path dataFolder = plugin.getDataFolder()
-            .toPath()
-            .toAbsolutePath()
-            .normalize();
+		Path dataFolder = plugin.getDataFolder().toPath().toAbsolutePath().normalize();
 
-        Path requestedPath = Path.of(fileName);
+		Path requestedPath = Path.of(fileName);
 
-        if (requestedPath.isAbsolute()) {
-            throw new IllegalArgumentException(
-                "SQLite file path must be relative"
-            );
-        }
+		if (requestedPath.isAbsolute()) {
+			throw new IllegalArgumentException("SQLite file path must be relative");
+		}
 
-        this.databasePath = dataFolder.resolve(requestedPath)
-            .normalize();
+		this.databasePath = dataFolder.resolve(requestedPath).normalize();
 
-        if (!databasePath.startsWith(dataFolder)
-                || databasePath.equals(dataFolder)) {
+		if (!databasePath.startsWith(dataFolder) || databasePath.equals(dataFolder)) {
 
-            throw new IllegalArgumentException(
-                "Invalid SQLite database path"
-            );
-        }
+			throw new IllegalArgumentException("Invalid SQLite database path");
+		}
 
-        ThreadFactory threadFactory = runnable -> {
+		ThreadFactory threadFactory = runnable -> {
 
-            Thread thread = new Thread(
-                runnable,
-                "gdibCore-SQLite"
-            );
+			Thread thread = new Thread(runnable, "gdibCore-SQLite");
 
-            thread.setDaemon(true);
+			thread.setDaemon(true);
 
-            return thread;
-        };
+			return thread;
+		};
 
-        this.executor = Executors.newSingleThreadExecutor(
-            threadFactory
-        );
+		this.executor = Executors.newSingleThreadExecutor(threadFactory);
 
-        this.closed = false;
-    }
+		this.closed = false;
+	}
 
-    @Override
-    public synchronized CompletableFuture<Void> save(
-            String key,
-            String value) {
+	@Override
+	public synchronized CompletableFuture<Void> save(String key, String value) {
 
-        validateKey(key);
-        Objects.requireNonNull(value, "Value cannot be null");
+		validateKey(key);
+		Objects.requireNonNull(value, "Value cannot be null");
 
-        return submit(conn -> {
+		return submit(conn -> {
 
-            String sql =
-                "INSERT INTO core_data (data_key, data_value) "
-                + "VALUES (?, ?) "
-                + "ON CONFLICT(data_key) "
-                + "DO UPDATE SET data_value = excluded.data_value";
+			String sql = "INSERT OR REPLACE INTO core_data (data_key, data_value) VALUES (?, ?)";
 
-            try (PreparedStatement statement =
-                    conn.prepareStatement(sql)) {
+			try (PreparedStatement statement = conn.prepareStatement(sql)) {
+				statement.setString(1, key);
+				statement.setString(2, value);
+				statement.executeUpdate();
+			}
 
-                statement.setString(1, key);
-                statement.setString(2, value);
+			return null;
+		});
+	}
 
-                statement.executeUpdate();
-            }
+	@Override
+	public synchronized CompletableFuture<Optional<String>> load(String key) {
 
-            return null;
-        });
-    }
+		validateKey(key);
 
-    @Override
-    public synchronized CompletableFuture<Optional<String>> load(
-            String key) {
+		return submit(conn -> {
 
-        validateKey(key);
+			String sql = "SELECT data_value FROM core_data " + "WHERE data_key = ?";
 
-        return submit(conn -> {
+			try (PreparedStatement statement = conn.prepareStatement(sql)) {
 
-            String sql =
-                "SELECT data_value FROM core_data "
-                + "WHERE data_key = ?";
+				statement.setString(1, key);
 
-            try (PreparedStatement statement =
-                    conn.prepareStatement(sql)) {
+				try (ResultSet result = statement.executeQuery()) {
 
-                statement.setString(1, key);
+					if (result.next()) {
+						return Optional.of(result.getString("data_value"));
+					}
+				}
+			}
 
-                try (ResultSet result = statement.executeQuery()) {
+			return Optional.empty();
+		});
+	}
 
-                    if (result.next()) {
-                        return Optional.of(
-                            result.getString("data_value")
-                        );
-                    }
-                }
-            }
+	@Override
+	public synchronized CompletableFuture<Boolean> exists(String key) {
 
-            return Optional.empty();
-        });
-    }
+		validateKey(key);
 
-    @Override
-    public synchronized CompletableFuture<Boolean> exists(
-            String key) {
+		return submit(conn -> {
 
-        validateKey(key);
+			String sql = "SELECT 1 FROM core_data WHERE data_key = ?";
 
-        return submit(conn -> {
+			try (PreparedStatement statement = conn.prepareStatement(sql)) {
 
-            String sql =
-                "SELECT 1 FROM core_data WHERE data_key = ?";
+				statement.setString(1, key);
 
-            try (PreparedStatement statement =
-                    conn.prepareStatement(sql)) {
+				try (ResultSet result = statement.executeQuery()) {
+					return result.next();
+				}
+			}
+		});
+	}
 
-                statement.setString(1, key);
+	@Override
+	public synchronized CompletableFuture<Void> delete(String key) {
 
-                try (ResultSet result = statement.executeQuery()) {
-                    return result.next();
-                }
-            }
-        });
-    }
+		validateKey(key);
 
-    @Override
-    public synchronized CompletableFuture<Void> delete(
-            String key) {
+		return submit(conn -> {
 
-        validateKey(key);
+			String sql = "DELETE FROM core_data WHERE data_key = ?";
 
-        return submit(conn -> {
+			try (PreparedStatement statement = conn.prepareStatement(sql)) {
 
-            String sql =
-                "DELETE FROM core_data WHERE data_key = ?";
+				statement.setString(1, key);
 
-            try (PreparedStatement statement =
-                    conn.prepareStatement(sql)) {
+				statement.executeUpdate();
+			}
 
-                statement.setString(1, key);
+			return null;
+		});
+	}
 
-                statement.executeUpdate();
-            }
+	private synchronized <T> CompletableFuture<T> submit(SQLiteOperation<T> operation) {
 
-            return null;
-        });
-    }
+		if (closed) {
+			throw new IllegalStateException("SQLite provider is already closed");
+		}
 
-    private synchronized <T> CompletableFuture<T> submit(
-            SQLiteOperation<T> operation) {
+		return CompletableFuture.supplyAsync(() -> {
 
-        if (closed) {
-            throw new IllegalStateException(
-                "SQLite provider is already closed"
-            );
-        }
+			try {
+				return operation.execute(getConnection());
 
-        return CompletableFuture.supplyAsync(() -> {
+			} catch (SQLException exception) {
 
-            try {
-                return operation.execute(getConnection());
+				throw new CompletionException("SQLite operation failed", exception);
+			}
 
-            } catch (SQLException exception) {
+		}, executor);
+	}
 
-                throw new CompletionException(
-                    "SQLite operation failed",
-                    exception
-                );
-            }
+	private Connection getConnection() throws SQLException {
 
-        }, executor);
-    }
+		if (connection == null || connection.isClosed()) {
 
-    private Connection getConnection() throws SQLException {
+			try {
 
-        if (connection == null || connection.isClosed()) {
+				Path parent = databasePath.getParent();
 
-            try {
+				if (parent != null) {
+					Files.createDirectories(parent);
+				}
 
-                Path parent = databasePath.getParent();
+				// Explicitly load the SQLite JDBC driver.
+				Class.forName("org.sqlite.JDBC");
 
-                if (parent != null) {
-                    Files.createDirectories(parent);
-                }
+				connection = DriverManager.getConnection("jdbc:sqlite:" + databasePath);
 
-                connection = DriverManager.getConnection(
-                    "jdbc:sqlite:" + databasePath
-                );
+				initializeDatabase();
 
-                initializeDatabase();
+			} catch (Exception exception) {
 
-            } catch (Exception exception) {
+				if (connection != null) {
+					try {
+						connection.close();
+					} catch (SQLException ignored) {
+						// Ignore secondary close errors.
+					}
 
-                if (connection != null) {
-                    try {
-                        connection.close();
-                    } catch (SQLException ignored) {
-                        // Ignore secondary close errors.
-                    }
+					connection = null;
+				}
 
-                    connection = null;
-                }
+				if (exception instanceof SQLException) {
+					throw (SQLException) exception;
+				}
 
-                if (exception instanceof SQLException) {
-                    throw (SQLException) exception;
-                }
+				throw new SQLException("Could not initialize SQLite database", exception);
+			}
+		}
 
-                throw new SQLException(
-                    "Could not initialize SQLite database",
-                    exception
-                );
-            }
-        }
+		return connection;
+	}
 
-        return connection;
-    }
+	private void initializeDatabase() throws SQLException {
 
-    private void initializeDatabase() throws SQLException {
+		String sql = "CREATE TABLE IF NOT EXISTS core_data (" + "data_key TEXT PRIMARY KEY, "
+				+ "data_value TEXT NOT NULL" + ")";
 
-        String sql =
-            "CREATE TABLE IF NOT EXISTS core_data ("
-            + "data_key TEXT PRIMARY KEY, "
-            + "data_value TEXT NOT NULL"
-            + ")";
+		try (Statement statement = connection.createStatement()) {
+			statement.executeUpdate(sql);
+		}
+	}
 
-        try (Statement statement = connection.createStatement()) {
-            statement.executeUpdate(sql);
-        }
-    }
+	private void validateKey(String key) {
 
-    private void validateKey(String key) {
+		if (key == null || key.trim().isEmpty()) {
+			throw new IllegalArgumentException("Storage key cannot be null or empty");
+		}
+	}
 
-        if (key == null || key.trim().isEmpty()) {
-            throw new IllegalArgumentException(
-                "Storage key cannot be null or empty"
-            );
-        }
-    }
+	@Override
+	public synchronized CompletableFuture<Void> close() {
 
-    @Override
-    public synchronized CompletableFuture<Void> close() {
+		if (closeFuture != null) {
+			return closeFuture;
+		}
 
-        if (closeFuture != null) {
-            return closeFuture;
-        }
+		closed = true;
 
-        closed = true;
+		closeFuture = CompletableFuture.runAsync(() -> {
 
-        closeFuture = CompletableFuture.runAsync(() -> {
+			if (connection != null) {
 
-            if (connection != null) {
+				try {
+					connection.close();
+					connection = null;
 
-                try {
-                    connection.close();
-                    connection = null;
+				} catch (SQLException exception) {
 
-                } catch (SQLException exception) {
+					throw new CompletionException("Could not close SQLite connection", exception);
+				}
+			}
 
-                    throw new CompletionException(
-                        "Could not close SQLite connection",
-                        exception
-                    );
-                }
-            }
+		}, executor).whenComplete((result, exception) -> {
+			executor.shutdown();
+		});
 
-        }, executor).whenComplete((result, exception) -> {
-            executor.shutdown();
-        });
+		return closeFuture;
+	}
 
-        return closeFuture;
-    }
+	@FunctionalInterface
+	private interface SQLiteOperation<T> {
 
-    @FunctionalInterface
-    private interface SQLiteOperation<T> {
-
-        T execute(Connection connection) throws SQLException;
-    }
+		T execute(Connection connection) throws SQLException;
+	}
 }

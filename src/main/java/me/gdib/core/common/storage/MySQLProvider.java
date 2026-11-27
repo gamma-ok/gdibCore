@@ -193,6 +193,17 @@ public final class MySQLProvider implements StorageProvider {
 
         if (connection == null || connection.isClosed()) {
 
+        	try {
+        	    Class.forName("org.mariadb.jdbc.Driver");
+
+        	} catch (ClassNotFoundException exception) {
+
+        	    throw new SQLException(
+        	        "MariaDB JDBC driver could not be loaded.",
+        	        exception
+        	    );
+        	}
+        	
             try {
 
                 String url =

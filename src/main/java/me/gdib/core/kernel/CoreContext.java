@@ -2,6 +2,9 @@ package me.gdib.core.kernel;
 
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.bukkit.plugin.java.JavaPlugin;
 import me.gdib.core.common.animation.AnimationManager;
 import me.gdib.core.common.config.ConfigManager;
@@ -60,8 +63,7 @@ public final class CoreContext {
 		StorageConfig storageConfig = new StorageConfig(configManager);
 		registerService(StorageConfig.class, storageConfig);
 
-		StorageManager storageManager =
-				StorageInitializer.initialize(plugin, storageConfig);
+		StorageManager storageManager = StorageInitializer.initialize(plugin, storageConfig);
 
 		registerService(StorageManager.class, storageManager);
 
@@ -124,8 +126,7 @@ public final class CoreContext {
 		// 1. Disable all modules.
 		executeShutdownStep("Disabling modules", () -> moduleManager.disableAll());
 
-		executeShutdownStep("Initiating storage shutdown",
-				this::shutdownStorage);
+		executeShutdownStep("Initiating storage shutdown", this::shutdownStorage);
 
 		// 2. Stop animations.
 		executeShutdownStep("Stopping animations",
@@ -162,31 +163,32 @@ public final class CoreContext {
 
 	private void shutdownStorage() {
 
-		Optional<StorageManager> storage =
-				getOptionalService(StorageManager.class);
+		Optional<StorageManager> storage = getOptionalService(StorageManager.class);
 
 		if (!storage.isPresent()) {
 			return;
 		}
 
-		storage.get().shutdown().whenComplete((result, exception) -> {
+		try {
 
-			if (exception != null) {
+			storage.get().shutdown().get(10, TimeUnit.SECONDS);
 
-				plugin.getLogger().severe(
-						"Failed to close storage provider: "
-								+ exception.getMessage()
-				);
+			plugin.getLogger().info("Storage provider closed successfully.");
 
-				exception.printStackTrace();
+		} catch (InterruptedException exception) {
 
-			} else {
+			Thread.currentThread().interrupt();
 
-				plugin.getLogger().info(
-						"Storage provider closed successfully."
-				);
-			}
-		});
+			throw new IllegalStateException("Storage shutdown was interrupted.", exception);
+
+		} catch (ExecutionException exception) {
+
+			throw new IllegalStateException("Failed to close storage provider.", exception.getCause());
+
+		} catch (TimeoutException exception) {
+
+			throw new IllegalStateException("Storage shutdown timed out after 10 seconds.", exception);
+		}
 	}
 
 	private void executeShutdownStep(String operation, Runnable action) {
