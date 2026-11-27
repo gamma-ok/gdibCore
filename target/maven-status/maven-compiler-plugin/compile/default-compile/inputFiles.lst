@@ -1,5 +1,14 @@
+C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\common\animation\AnimationManager.java
+C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\common\config\ConfigManager.java
+C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\common\cooldown\CooldownManager.java
 C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\common\event\EventBus.java
+C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\common\message\MessageManager.java
+C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\common\placeholder\PlaceholderManager.java
+C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\common\player\PlayerManager.java
 C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\common\scheduler\SchedulerManager.java
+C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\common\storage\StorageManager.java
+C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\common\storage\StorageProvider.java
+C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\common\text\TextFormatter.java
 C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\CorePlugin.java
 C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\kernel\CoreContext.java
 C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\kernel\Module.java
