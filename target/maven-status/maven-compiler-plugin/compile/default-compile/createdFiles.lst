@@ -1,0 +1,9 @@
+me\gdib\core\kernel\Module.class
+me\gdib\core\CorePlugin.class
+me\gdib\core\common\event\EventBus.class
+me\gdib\core\kernel\ServiceRegistry.class
+me\gdib\core\kernel\ModuleDescriptor.class
+me\gdib\core\kernel\ModuleState.class
+me\gdib\core\kernel\ModuleManager.class
+me\gdib\core\kernel\CoreContext.class
+me\gdib\core\common\scheduler\SchedulerManager.class
