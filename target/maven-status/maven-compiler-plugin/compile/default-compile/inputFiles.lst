@@ -7,8 +7,13 @@ C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\common\messag
 C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\common\placeholder\PlaceholderManager.java
 C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\common\player\PlayerManager.java
 C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\common\scheduler\SchedulerManager.java
+C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\common\storage\MySQLProvider.java
+C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\common\storage\SQLiteProvider.java
+C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\common\storage\StorageConfig.java
+C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\common\storage\StorageInitializer.java
 C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\common\storage\StorageManager.java
 C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\common\storage\StorageProvider.java
+C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\common\storage\StorageType.java
 C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\common\text\TextFormatter.java
 C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\CorePlugin.java
 C:\Users\User\Documents\GitHub\gdibCore\src\main\java\me\gdib\core\kernel\AbstractModule.java

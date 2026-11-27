@@ -10,7 +10,10 @@ public final class StorageManager {
 
     private volatile boolean closed;
 
+    private CompletableFuture<Void> shutdownFuture;
+
     public StorageManager(StorageProvider provider) {
+
         this.provider = Objects.requireNonNull(
             provider,
             "StorageProvider cannot be null"
@@ -19,7 +22,7 @@ public final class StorageManager {
         this.closed = false;
     }
 
-    public CompletableFuture<Void> save(
+    public synchronized CompletableFuture<Void> save(
             String key,
             String value) {
 
@@ -31,7 +34,9 @@ public final class StorageManager {
         );
     }
 
-    public CompletableFuture<Optional<String>> load(String key) {
+    public synchronized CompletableFuture<Optional<String>> load(
+            String key) {
+
         ensureOpen();
 
         return Objects.requireNonNull(
@@ -40,7 +45,9 @@ public final class StorageManager {
         );
     }
 
-    public CompletableFuture<Boolean> exists(String key) {
+    public synchronized CompletableFuture<Boolean> exists(
+            String key) {
+
         ensureOpen();
 
         return Objects.requireNonNull(
@@ -49,7 +56,8 @@ public final class StorageManager {
         );
     }
 
-    public CompletableFuture<Void> delete(String key) {
+    public synchronized CompletableFuture<Void> delete(String key) {
+
         ensureOpen();
 
         return Objects.requireNonNull(
@@ -58,17 +66,27 @@ public final class StorageManager {
         );
     }
 
-    public CompletableFuture<Void> shutdown() {
-        if (closed) {
-            return CompletableFuture.completedFuture(null);
+    public synchronized CompletableFuture<Void> shutdown() {
+
+        if (shutdownFuture != null) {
+            return shutdownFuture;
         }
 
         closed = true;
 
-        return Objects.requireNonNull(
-            provider.close(),
-            "Storage provider returned a null future"
-        );
+        try {
+
+            shutdownFuture = Objects.requireNonNull(
+                provider.close(),
+                "Storage provider returned a null future"
+            );
+
+        } catch (RuntimeException exception) {
+
+            shutdownFuture = CompletableFuture.failedFuture(exception);
+        }
+
+        return shutdownFuture;
     }
 
     public boolean isClosed() {
@@ -76,6 +94,7 @@ public final class StorageManager {
     }
 
     private void ensureOpen() {
+
         if (closed) {
             throw new IllegalStateException(
                 "Storage manager is already closed"

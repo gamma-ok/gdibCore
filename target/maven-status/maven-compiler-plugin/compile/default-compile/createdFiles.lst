@@ -1,13 +1,16 @@
 me\gdib\core\kernel\event\ModuleStateChangeEvent.class
 me\gdib\core\common\placeholder\PlaceholderManager.class
 me\gdib\core\common\cooldown\CooldownManager.class
+me\gdib\core\common\storage\StorageType.class
 me\gdib\core\common\text\TextFormatter.class
 me\gdib\core\kernel\ModuleConfig.class
+me\gdib\core\common\storage\MySQLProvider.class
 me\gdib\core\common\config\ConfigManager.class
 me\gdib\core\common\message\MessageManager.class
 me\gdib\core\kernel\ServiceRegistry.class
 me\gdib\core\kernel\ModuleState.class
 me\gdib\core\common\config\CoreConfig.class
+me\gdib\core\common\storage\StorageInitializer$1.class
 me\gdib\core\common\storage\StorageManager.class
 me\gdib\core\kernel\ModuleManager.class
 me\gdib\core\CorePlugin.class
@@ -20,4 +23,9 @@ me\gdib\core\common\storage\StorageProvider.class
 me\gdib\core\kernel\ModuleContext.class
 me\gdib\core\kernel\CoreContext.class
 me\gdib\core\kernel\Module.class
+me\gdib\core\common\storage\SQLiteProvider$SQLiteOperation.class
+me\gdib\core\common\storage\SQLiteProvider.class
+me\gdib\core\common\storage\StorageInitializer.class
+me\gdib\core\common\storage\StorageConfig.class
+me\gdib\core\common\storage\MySQLProvider$MySQLOperation.class
 me\gdib\core\common\scheduler\SchedulerManager.class
