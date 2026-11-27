@@ -1,11 +1,13 @@
 package me.gdib.core.common.scheduler;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitScheduler;
@@ -13,109 +15,204 @@ import org.bukkit.scheduler.BukkitTask;
 
 public final class SchedulerManager {
 
-	private final JavaPlugin plugin;
-	private final BukkitScheduler scheduler;
+    private final JavaPlugin plugin;
+    private final BukkitScheduler scheduler;
 
-	private final Map<Integer, BukkitTask> tasks;
+    private final Map<Integer, BukkitTask> tasks;
 
-	public SchedulerManager(JavaPlugin plugin) {
-		this.plugin = Objects.requireNonNull(plugin, "Plugin cannot be null");
+    public SchedulerManager(JavaPlugin plugin) {
+        this.plugin = Objects.requireNonNull(plugin, "Plugin cannot be null");
 
-		this.scheduler = Bukkit.getScheduler();
-		this.tasks = new HashMap<>();
-	}
+        this.scheduler = Bukkit.getScheduler();
+        this.tasks = new ConcurrentHashMap<>();
+    }
 
-	public int runSync(Runnable task) {
-		return registerTask(scheduler.runTask(plugin, validateTask(task)));
-	}
+    // =========================================================
+    // SYNCHRONOUS TASKS
+    // =========================================================
 
-	public int runLater(Runnable task, long delay) {
-		validateDelay(delay);
+    public synchronized int runSync(Runnable task) {
+        return scheduleOneShot(
+                wrappedTask -> scheduler.runTask(plugin, wrappedTask),
+                task
+        );
+    }
 
-		return registerTask(scheduler.runTaskLater(plugin, validateTask(task), delay));
-	}
+    public synchronized int runLater(Runnable task, long delay) {
+        validateDelay(delay);
 
-	public int runTimer(Runnable task, long delay, long period) {
+        return scheduleOneShot(
+                wrappedTask -> scheduler.runTaskLater(plugin, wrappedTask, delay),
+                task
+        );
+    }
 
-		validateDelay(delay);
-		validatePeriod(period);
+    public synchronized int runTimer(Runnable task, long delay, long period) {
+        validateDelay(delay);
+        validatePeriod(period);
 
-		return registerTask(scheduler.runTaskTimer(plugin, validateTask(task), delay, period));
-	}
+        return registerTask(
+                scheduler.runTaskTimer(plugin, validateTask(task), delay, period)
+        );
+    }
 
-	public int runAsync(Runnable task) {
-		return registerTask(scheduler.runTaskAsynchronously(plugin, validateTask(task)));
-	}
+    // =========================================================
+    // ASYNCHRONOUS TASKS
+    // =========================================================
 
-	public int runAsyncLater(Runnable task, long delay) {
-		validateDelay(delay);
+    public synchronized int runAsync(Runnable task) {
+        return scheduleOneShot(
+                wrappedTask -> scheduler.runTaskAsynchronously(plugin, wrappedTask),
+                task
+        );
+    }
 
-		return registerTask(scheduler.runTaskLaterAsynchronously(plugin, validateTask(task), delay));
-	}
+    public synchronized int runAsyncLater(Runnable task, long delay) {
+        validateDelay(delay);
 
-	public int runAsyncTimer(Runnable task, long delay, long period) {
+        return scheduleOneShot(
+                wrappedTask -> scheduler.runTaskLaterAsynchronously(
+                        plugin, wrappedTask, delay
+                ),
+                task
+        );
+    }
 
-		validateDelay(delay);
-		validatePeriod(period);
+    public synchronized int runAsyncTimer(Runnable task, long delay, long period) {
+        validateDelay(delay);
+        validatePeriod(period);
 
-		return registerTask(scheduler.runTaskTimerAsynchronously(plugin, validateTask(task), delay, period));
-	}
+        return registerTask(
+                scheduler.runTaskTimerAsynchronously(
+                        plugin, validateTask(task), delay, period
+                )
+        );
+    }
 
-	private int registerTask(BukkitTask task) {
-		int taskId = task.getTaskId();
+    // =========================================================
+    // TASK REGISTRATION
+    // =========================================================
 
-		tasks.put(taskId, task);
+    private int scheduleOneShot(
+            Function<Runnable, BukkitTask> schedulerFunction,
+            Runnable task
+    ) {
+        Objects.requireNonNull(schedulerFunction, "Scheduler function cannot be null");
 
-		return taskId;
-	}
+        AtomicReference<BukkitTask> taskReference = new AtomicReference<>();
+        AtomicBoolean completed = new AtomicBoolean(false);
 
-	public void cancelTask(int taskId) {
-		BukkitTask task = tasks.remove(taskId);
+        Runnable wrappedTask = () -> {
+            try {
+                validateTask(task).run();
+            } finally {
+                completed.set(true);
 
-		if (task != null) {
-			task.cancel();
-		}
-	}
+                BukkitTask scheduledTask = taskReference.get();
 
-	public void cancelAll() {
-		List<BukkitTask> activeTasks = new ArrayList<>(tasks.values());
+                if (scheduledTask != null) {
+                    tasks.remove(scheduledTask.getTaskId(), scheduledTask);
+                }
+            }
+        };
 
-		for (BukkitTask task : activeTasks) {
-			task.cancel();
-		}
+        BukkitTask scheduledTask = schedulerFunction.apply(wrappedTask);
 
-		tasks.clear();
-	}
+        int taskId = scheduledTask.getTaskId();
 
-	public boolean isActive(int taskId) {
-		BukkitTask task = tasks.get(taskId);
+        tasks.put(taskId, scheduledTask);
+        taskReference.set(scheduledTask);
 
-		if (task == null) {
-			return false;
-		}
+        // Handles tasks that finish before their registration completes.
+        if (completed.get()) {
+            tasks.remove(taskId, scheduledTask);
+        }
 
-		boolean active = scheduler.isQueued(taskId) || scheduler.isCurrentlyRunning(taskId);
+        return taskId;
+    }
 
-		if (!active) {
-			tasks.remove(taskId);
-		}
+    private int registerTask(BukkitTask task) {
+        int taskId = task.getTaskId();
 
-		return active;
-	}
+        tasks.put(taskId, task);
 
-	private Runnable validateTask(Runnable task) {
-		return Objects.requireNonNull(task, "Task cannot be null");
-	}
+        return taskId;
+    }
 
-	private void validateDelay(long delay) {
-		if (delay < 0) {
-			throw new IllegalArgumentException("Delay cannot be negative");
-		}
-	}
+    // =========================================================
+    // TASK CANCELLATION
+    // =========================================================
 
-	private void validatePeriod(long period) {
-		if (period <= 0) {
-			throw new IllegalArgumentException("Period must be greater than zero");
-		}
-	}
+    public synchronized void cancelTask(int taskId) {
+        BukkitTask task = tasks.remove(taskId);
+
+        if (task != null) {
+            task.cancel();
+        }
+    }
+
+    public synchronized void cancelAll() {
+        List<BukkitTask> activeTasks = new ArrayList<>(tasks.values());
+
+        for (BukkitTask task : activeTasks) {
+            try {
+                task.cancel();
+            } catch (RuntimeException exception) {
+                plugin.getLogger().severe(
+                        "Could not cancel scheduled task " + task.getTaskId()
+                );
+
+                exception.printStackTrace();
+            }
+        }
+
+        tasks.clear();
+    }
+
+    // =========================================================
+    // TASK INFORMATION
+    // =========================================================
+
+    public synchronized boolean isActive(int taskId) {
+        BukkitTask task = tasks.get(taskId);
+
+        if (task == null) {
+            return false;
+        }
+
+        boolean active = scheduler.isQueued(taskId)
+                || scheduler.isCurrentlyRunning(taskId);
+
+        if (!active) {
+            tasks.remove(taskId, task);
+        }
+
+        return active;
+    }
+
+    public synchronized int getScheduledTaskCount() {
+        return tasks.size();
+    }
+
+    // =========================================================
+    // VALIDATION
+    // =========================================================
+
+    private Runnable validateTask(Runnable task) {
+        return Objects.requireNonNull(task, "Task cannot be null");
+    }
+
+    private void validateDelay(long delay) {
+        if (delay < 0) {
+            throw new IllegalArgumentException("Delay cannot be negative");
+        }
+    }
+
+    private void validatePeriod(long period) {
+        if (period <= 0) {
+            throw new IllegalArgumentException(
+                    "Period must be greater than zero"
+            );
+        }
+    }
 }

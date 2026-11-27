@@ -1,4 +1,3 @@
-
 package me.gdib.core.kernel;
 
 import me.gdib.core.kernel.event.ModuleStateChangeEvent;
@@ -18,409 +17,581 @@ import java.util.HashMap;
 
 public final class ModuleManager {
 
-	private final Map<String, Module> modules;
-	private final Map<String, ModuleState> states;
-	private final CoreContext context;
-	private final Map<String, ModuleContext> contexts;
+    private final Map<String, Module> modules;
+    private final Map<String, ModuleState> states;
+    private final CoreContext context;
+    private final Map<String, ModuleContext> contexts;
 
-	public ModuleManager(CoreContext context) {
+    public ModuleManager(CoreContext context) {
 
-		this.context = Objects.requireNonNull(context, "CoreContext cannot be null");
+        this.context = Objects.requireNonNull(
+                context,
+                "CoreContext cannot be null"
+        );
 
-		this.modules = new LinkedHashMap<>();
-		this.states = new LinkedHashMap<>();
-		this.contexts = new HashMap<>();
-	}
+        this.modules = new LinkedHashMap<>();
+        this.states = new LinkedHashMap<>();
+        this.contexts = new HashMap<>();
+    }
 
-	public void registerModule(Module module) {
+    // =========================================================
+    // MODULE REGISTRATION
+    // =========================================================
 
-		Objects.requireNonNull(module, "Module cannot be null");
+    public void registerModule(Module module) {
 
-		ModuleDescriptor descriptor = Objects.requireNonNull(module.getDescriptor(),
-				"Module descriptor cannot be null");
+        Objects.requireNonNull(module, "Module cannot be null");
 
-		String name = descriptor.getName();
+        ModuleDescriptor descriptor = Objects.requireNonNull(
+                module.getDescriptor(),
+                "Module descriptor cannot be null"
+        );
 
-		// Prevent duplicate names regardless of capitalization.
-		for (String registeredName : modules.keySet()) {
+        String name = descriptor.getName();
 
-			if (registeredName.equalsIgnoreCase(name)) {
-				throw new IllegalStateException(
-						"A module with the same name already exists: " + registeredName + " / " + name);
-			}
-		}
+        if (findRegisteredModuleName(name) != null) {
+            throw new IllegalStateException(
+                    "A module with the same name already exists: " + name
+            );
+        }
 
-		ModuleContext moduleContext = new ModuleContext(context, descriptor);
+        ModuleContext moduleContext = new ModuleContext(context, descriptor);
 
-		modules.put(name, module);
-		states.put(name, ModuleState.UNLOADED);
-		contexts.put(name, moduleContext);
+        modules.put(name, module);
+        states.put(name, ModuleState.UNLOADED);
+        contexts.put(name, moduleContext);
 
-		context.getPlugin().getLogger().info("Module registered: " + name);
-	}
+        context.getPlugin().getLogger().info(
+                "Module registered: " + name
+        );
+    }
 
-	public void enableModule(String name) throws Exception {
+    // =========================================================
+    // MODULE ENABLEMENT
+    // =========================================================
 
-		Set<String> enabling = new LinkedHashSet<>();
+    public void enableModule(String name) throws Exception {
 
-		enableModule(name, enabling);
-	}
+        String registeredName = findRegisteredModuleName(name);
 
-	private void enableModule(String name, Set<String> enabling) throws Exception {
+        if (registeredName == null) {
+            throw new IllegalArgumentException(
+                    "Module is not registered: " + name
+            );
+        }
 
-		Module module = modules.get(name);
+        Set<String> enabling = new LinkedHashSet<>();
 
-		if (module == null) {
-			throw new IllegalArgumentException("Module is not registered: " + name);
-		}
+        enableModule(registeredName, enabling);
+    }
 
-		ModuleState currentState = states.get(name);
+    private void enableModule(
+            String name,
+            Set<String> enabling
+    ) throws Exception {
 
-		if (currentState == ModuleState.ENABLED) {
-			return;
-		}
+        Module module = modules.get(name);
 
-		if (currentState == ModuleState.LOADING || enabling.contains(name)) {
+        if (module == null) {
+            throw new IllegalArgumentException(
+                    "Module is not registered: " + name
+            );
+        }
 
-			throw new IllegalStateException("Circular module dependency detected: " + name);
-		}
+        ModuleState currentState = states.get(name);
 
-		enabling.add(name);
+        if (currentState == ModuleState.ENABLED) {
+            return;
+        }
 
-		changeState(name, ModuleState.LOADING);
+        if (currentState == ModuleState.LOADING || enabling.contains(name)) {
+            throw new IllegalStateException(
+                    "Circular module dependency detected: " + name
+            );
+        }
 
-		try {
+        enabling.add(name);
 
-			ModuleDescriptor descriptor = module.getDescriptor();
+        try {
 
-			// Enable dependencies first.
-			for (String dependency : descriptor.getDependencies()) {
+            changeState(name, ModuleState.LOADING);
 
-				if (!modules.containsKey(dependency)) {
-					throw new IllegalStateException(
-							"Missing dependency '" + dependency + "' required by module '" + name + "'");
-				}
+            ModuleDescriptor descriptor = module.getDescriptor();
 
-				enableModule(dependency, enabling);
-			}
+            // Enable dependencies first.
+            for (String dependency : descriptor.getDependencies()) {
 
-			// Enable current module.
-			module.onEnable(contexts.get(name));
+                String registeredDependency =
+                        findRegisteredModuleName(dependency);
 
-			changeState(name, ModuleState.ENABLED);
+                if (registeredDependency == null) {
+                    throw new IllegalStateException(
+                            "Missing dependency '" + dependency
+                                    + "' required by module '" + name + "'"
+                    );
+                }
 
-			context.getPlugin().getLogger().info("Module enabled: " + name);
+                enableModule(registeredDependency, enabling);
+            }
 
-		} catch (Exception exception) {
+            // Enable current module.
+            module.onEnable(contexts.get(name));
 
-			// Clean up resources created during initialization.
-			cleanupModuleResources(name);
+            changeState(name, ModuleState.ENABLED);
 
-			changeState(name, ModuleState.FAILED);
+            context.getPlugin().getLogger().info(
+                    "Module enabled: " + name
+            );
 
-			context.getPlugin().getLogger().severe("Failed to enable module: " + name);
+        } catch (Exception exception) {
 
-			throw exception;
-		} finally {
-			enabling.remove(name);
-		}
-	}
+            // Clean up resources created during initialization.
+            cleanupModuleResources(name);
 
-	public void disableModule(String name) {
+            changeState(name, ModuleState.FAILED);
 
-		// Verify that the module exists.
-		if (!modules.containsKey(name)) {
-			throw new IllegalArgumentException("Module is not registered: " + name);
-		}
+            context.getPlugin().getLogger().severe(
+                    "Failed to enable module: " + name
+            );
 
-		Set<String> processed = new LinkedHashSet<>();
+            throw exception;
 
-		disableModule(name, processed);
-	}
+        } finally {
 
-	private void disableModule(String name, Set<String> processed) {
+            enabling.remove(name);
+        }
+    }
 
-		if (!processed.add(name)) {
-			return;
-		}
+    // =========================================================
+    // MODULE DISABLEMENT
+    // =========================================================
 
-		// Disable active dependents first.
-		for (Map.Entry<String, Module> entry : modules.entrySet()) {
+    public void disableModule(String name) {
 
-			String dependentName = entry.getKey();
+        String registeredName = findRegisteredModuleName(name);
 
-			if (states.get(dependentName) != ModuleState.ENABLED) {
-				continue;
-			}
+        if (registeredName == null) {
+            throw new IllegalArgumentException(
+                    "Module is not registered: " + name
+            );
+        }
 
-			List<String> dependencies = entry.getValue().getDescriptor().getDependencies();
+        Set<String> processed = new LinkedHashSet<>();
 
-			if (dependencies.contains(name)) {
-				disableModule(dependentName, processed);
-			}
-		}
+        disableModule(registeredName, processed);
+    }
 
-		if (states.get(name) != ModuleState.ENABLED) {
-			return;
-		}
+    private void disableModule(
+            String name,
+            Set<String> processed
+    ) {
 
-		try {
+        if (!processed.add(name)) {
+            return;
+        }
 
-			ModuleContext moduleContext = contexts.get(name);
+        // Disable active dependents first.
+        for (Map.Entry<String, Module> entry : modules.entrySet()) {
 
-			modules.get(name).onDisable(moduleContext);
+            String dependentName = entry.getKey();
 
-			changeState(name, ModuleState.DISABLED);
+            if (states.get(dependentName) != ModuleState.ENABLED) {
+                continue;
+            }
 
-			context.getPlugin().getLogger().info("Module disabled: " + name);
+            List<String> dependencies =
+                    entry.getValue().getDescriptor().getDependencies();
 
-		} catch (Exception exception) {
+            boolean dependsOnModule = dependencies.stream()
+                    .anyMatch(dependency -> dependency.equalsIgnoreCase(name));
 
-			changeState(name, ModuleState.FAILED);
+            if (dependsOnModule) {
+                disableModule(dependentName, processed);
+            }
+        }
 
-			context.getPlugin().getLogger().severe("Failed to disable module: " + name);
+        if (states.get(name) != ModuleState.ENABLED) {
+            return;
+        }
 
-			exception.printStackTrace();
+        try {
 
-		} finally {
+            ModuleContext moduleContext = contexts.get(name);
 
-			// Always clean up module resources.
-			cleanupModuleResources(name);
-		}
-	}
+            modules.get(name).onDisable(moduleContext);
 
-	public void enableAll() {
+            changeState(name, ModuleState.DISABLED);
 
-		// Validate the dependency graph before enabling modules.
-		validateDependencies();
+            context.getPlugin().getLogger().info(
+                    "Module disabled: " + name
+            );
 
-		for (Map.Entry<String, Module> entry : modules.entrySet()) {
+        } catch (Exception exception) {
 
-			String name = entry.getKey();
+            changeState(name, ModuleState.FAILED);
 
-			if (!entry.getValue().getDescriptor().isEnabledByDefault()) {
-				continue;
-			}
+            context.getPlugin().getLogger().severe(
+                    "Failed to disable module: " + name
+            );
 
-			try {
-				enableModule(name);
+            exception.printStackTrace();
 
-			} catch (Exception exception) {
+        } finally {
 
-				context.getPlugin().getLogger()
-						.severe("Could not enable module " + name + ": " + exception.getMessage());
-			}
-		}
-	}
+            // Always clean up module resources.
+            cleanupModuleResources(name);
+        }
+    }
 
-	public void disableAll() {
+    // =========================================================
+    // GLOBAL MODULE MANAGEMENT
+    // =========================================================
 
-		List<String> names = new ArrayList<>(modules.keySet());
+    public void enableAll() {
 
-		Collections.reverse(names);
+        // Validate the dependency graph before enabling modules.
+        validateDependencies();
 
-		for (String name : names) {
-			disableModule(name);
-		}
-	}
+        for (Map.Entry<String, Module> entry : modules.entrySet()) {
 
-	public Optional<Module> getModule(String name) {
-		return Optional.ofNullable(modules.get(name));
-	}
+            String name = entry.getKey();
 
-	public ModuleState getState(String name) {
+            if (!entry.getValue().getDescriptor().isEnabledByDefault()) {
+                continue;
+            }
 
-		if (!states.containsKey(name)) {
-			throw new IllegalArgumentException("Module is not registered: " + name);
-		}
+            try {
 
-		return states.get(name);
-	}
+                enableModule(name);
 
-	public Map<String, Module> getModules() {
-		return Collections.unmodifiableMap(modules);
-	}
+            } catch (Exception exception) {
 
-	public int getModuleCount() {
-		return modules.size();
-	}
+                context.getPlugin().getLogger().severe(
+                        "Could not enable module " + name
+                                + ": " + exception.getMessage()
+                );
+            }
+        }
+    }
 
-	public void validateDependencies() {
+    public void disableAll() {
 
-		Set<String> visited = new HashSet<>();
-		Set<String> visiting = new LinkedHashSet<>();
+        List<String> names = new ArrayList<>(modules.keySet());
 
-		for (String name : modules.keySet()) {
-			validateModule(name, visited, visiting);
-		}
+        Collections.reverse(names);
 
-		context.getPlugin().getLogger().info("Module dependencies validated successfully.");
-	}
+        for (String name : names) {
+            disableModule(name);
+        }
+    }
 
-	private void validateModule(String name, Set<String> visited, Set<String> visiting) {
+    // =========================================================
+    // MODULE RETRIEVAL
+    // =========================================================
 
-		if (visited.contains(name)) {
-			return;
-		}
+    public Optional<Module> getModule(String name) {
 
-		if (!visiting.add(name)) {
-			throw new IllegalStateException(
-					"Circular module dependency detected: " + String.join(" -> ", visiting) + " -> " + name);
-		}
+        String registeredName = findRegisteredModuleName(name);
 
-		Module module = modules.get(name);
+        if (registeredName == null) {
+            return Optional.empty();
+        }
 
-		if (module == null) {
-			throw new IllegalStateException("Module is not registered: " + name);
-		}
+        return Optional.ofNullable(modules.get(registeredName));
+    }
 
-		for (String dependency : module.getDescriptor().getDependencies()) {
+    public ModuleState getState(String name) {
 
-			if (!modules.containsKey(dependency)) {
-				throw new IllegalStateException(
-						"Missing dependency '" + dependency + "' required by module '" + name + "'");
-			}
+        String registeredName = findRegisteredModuleName(name);
 
-			validateModule(dependency, visited, visiting);
-		}
+        if (registeredName == null) {
+            throw new IllegalArgumentException(
+                    "Module is not registered: " + name
+            );
+        }
 
-		visiting.remove(name);
-		visited.add(name);
-	}
+        return states.get(registeredName);
+    }
 
-	private void cleanupModuleResources(String name) {
+    public Map<String, Module> getModules() {
+        return Collections.unmodifiableMap(modules);
+    }
 
-		ModuleContext moduleContext = contexts.get(name);
+    public int getModuleCount() {
+        return modules.size();
+    }
 
-		if (moduleContext == null) {
-			return;
-		}
+    // =========================================================
+    // DEPENDENCY VALIDATION
+    // =========================================================
 
-		// Remove event subscriptions.
-		try {
-			moduleContext.unsubscribeAll();
+    public void validateDependencies() {
 
-		} catch (Exception exception) {
-			context.getPlugin().getLogger().severe("Failed to remove event subscriptions for module: " + name);
+        Set<String> visited = new HashSet<>();
+        Set<String> visiting = new LinkedHashSet<>();
 
-			exception.printStackTrace();
-		}
+        for (String name : modules.keySet()) {
+            validateModule(name, visited, visiting);
+        }
 
-		// Cancel scheduled tasks.
-		try {
-			moduleContext.cancelTasks();
+        context.getPlugin().getLogger().info(
+                "Module dependencies validated successfully."
+        );
+    }
 
-		} catch (Exception exception) {
-			context.getPlugin().getLogger().severe("Failed to cancel scheduled tasks for module: " + name);
+    private void validateModule(
+            String name,
+            Set<String> visited,
+            Set<String> visiting
+    ) {
 
-			exception.printStackTrace();
-		}
+        if (visited.contains(name)) {
+            return;
+        }
 
-		// Unregister module commands.
-		try {
-			moduleContext.unregisterCommands();
+        if (!visiting.add(name)) {
+            throw new IllegalStateException(
+                    "Circular module dependency detected: "
+                            + String.join(" -> ", visiting)
+                            + " -> " + name
+            );
+        }
 
-		} catch (Exception exception) {
-			context.getPlugin().getLogger().severe("Failed to unregister commands for module: " + name);
+        Module module = modules.get(name);
 
-			exception.printStackTrace();
-		}
-	}
+        if (module == null) {
+            throw new IllegalStateException(
+                    "Module is not registered: " + name
+            );
+        }
 
-	private void changeState(String name, ModuleState newState) {
+        for (String dependency : module.getDescriptor().getDependencies()) {
 
-		ModuleState previousState = states.get(name);
+            String registeredDependency =
+                    findRegisteredModuleName(dependency);
 
-		if (previousState == newState) {
-			return;
-		}
+            if (registeredDependency == null) {
+                throw new IllegalStateException(
+                        "Missing dependency '" + dependency
+                                + "' required by module '" + name + "'"
+                );
+            }
 
-		states.put(name, newState);
+            validateModule(registeredDependency, visited, visiting);
+        }
 
-		context.getService(EventBus.class).publish(new ModuleStateChangeEvent(name, previousState, newState));
-	}
+        visiting.remove(name);
+        visited.add(name);
+    }
 
-	public boolean isEnabled(String name) {
+    // =========================================================
+    // RESOURCE CLEANUP
+    // =========================================================
 
-		if (!states.containsKey(name)) {
-			return false;
-		}
+    private void cleanupModuleResources(String name) {
 
-		return states.get(name) == ModuleState.ENABLED;
-	}
+        ModuleContext moduleContext = contexts.get(name);
 
-	public List<String> getModulesByState(ModuleState state) {
+        if (moduleContext == null) {
+            return;
+        }
 
-		Objects.requireNonNull(state, "Module state cannot be null");
+        // Remove event subscriptions.
+        try {
 
-		List<String> result = new ArrayList<>();
+            moduleContext.unsubscribeAll();
 
-		for (Map.Entry<String, ModuleState> entry : states.entrySet()) {
+        } catch (Exception exception) {
 
-			if (entry.getValue() == state) {
-				result.add(entry.getKey());
-			}
-		}
+            context.getPlugin().getLogger().severe(
+                    "Failed to remove event subscriptions for module: " + name
+            );
 
-		return Collections.unmodifiableList(result);
-	}
+            exception.printStackTrace();
+        }
 
-	public int getEnabledModuleCount() {
+        // Cancel scheduled tasks.
+        try {
 
-		int count = 0;
+            moduleContext.cancelTasks();
 
-		for (ModuleState state : states.values()) {
+        } catch (Exception exception) {
 
-			if (state == ModuleState.ENABLED) {
-				count++;
-			}
-		}
+            context.getPlugin().getLogger().severe(
+                    "Failed to cancel scheduled tasks for module: " + name
+            );
 
-		return count;
-	}
+            exception.printStackTrace();
+        }
 
-	public void unregisterModule(String name) {
+        // Unregister module commands.
+        try {
 
-		if (!modules.containsKey(name)) {
-			throw new IllegalArgumentException("Module is not registered: " + name);
-		}
+            moduleContext.unregisterCommands();
 
-		ModuleState state = states.get(name);
+        } catch (Exception exception) {
 
-		if (state == ModuleState.ENABLED || state == ModuleState.LOADING) {
+            context.getPlugin().getLogger().severe(
+                    "Failed to unregister commands for module: " + name
+            );
 
-			throw new IllegalStateException("Cannot unregister an active module: " + name);
-		}
+            exception.printStackTrace();
+        }
+    }
 
-		// Check whether another registered module depends on this one.
-		for (Map.Entry<String, Module> entry : modules.entrySet()) {
+    // =========================================================
+    // MODULE STATE MANAGEMENT
+    // =========================================================
 
-			String dependentName = entry.getKey();
+    private void changeState(
+            String name,
+            ModuleState newState
+    ) {
 
-			if (dependentName.equals(name)) {
-				continue;
-			}
+        ModuleState previousState = states.get(name);
 
-			List<String> dependencies = entry.getValue().getDescriptor().getDependencies();
+        if (previousState == newState) {
+            return;
+        }
 
-			if (dependencies.contains(name)) {
-				throw new IllegalStateException(
-						"Cannot unregister module '" + name + "'. Module '" + dependentName + "' depends on it.");
-			}
-		}
+        states.put(name, newState);
 
-		// Save and unload the module configuration.
-		ModuleContext moduleContext = contexts.get(name);
+        context.getService(EventBus.class).publish(
+                new ModuleStateChangeEvent(
+                        name,
+                        previousState,
+                        newState
+                )
+        );
+    }
 
-		if (moduleContext != null) {
-			moduleContext.getModuleConfig().unload();
-		}
+    public boolean isEnabled(String name) {
 
-		// Remove module references.
-		modules.remove(name);
-		states.remove(name);
-		contexts.remove(name);
+        String registeredName = findRegisteredModuleName(name);
 
-		context.getPlugin().getLogger().info("Module unregistered: " + name);
-	}
+        if (registeredName == null) {
+            return false;
+        }
+
+        return states.get(registeredName) == ModuleState.ENABLED;
+    }
+
+    public List<String> getModulesByState(ModuleState state) {
+
+        Objects.requireNonNull(
+                state,
+                "Module state cannot be null"
+        );
+
+        List<String> result = new ArrayList<>();
+
+        for (Map.Entry<String, ModuleState> entry : states.entrySet()) {
+
+            if (entry.getValue() == state) {
+                result.add(entry.getKey());
+            }
+        }
+
+        return Collections.unmodifiableList(result);
+    }
+
+    public int getEnabledModuleCount() {
+
+        int count = 0;
+
+        for (ModuleState state : states.values()) {
+
+            if (state == ModuleState.ENABLED) {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    // =========================================================
+    // MODULE UNREGISTRATION
+    // =========================================================
+
+    public void unregisterModule(String name) {
+
+        String registeredName = findRegisteredModuleName(name);
+
+        if (registeredName == null) {
+            throw new IllegalArgumentException(
+                    "Module is not registered: " + name
+            );
+        }
+
+        ModuleState state = states.get(registeredName);
+
+        if (state == ModuleState.ENABLED || state == ModuleState.LOADING) {
+            throw new IllegalStateException(
+                    "Cannot unregister an active module: " + registeredName
+            );
+        }
+
+        // Check whether another registered module depends on this one.
+        for (Map.Entry<String, Module> entry : modules.entrySet()) {
+
+            String dependentName = entry.getKey();
+
+            if (dependentName.equals(registeredName)) {
+                continue;
+            }
+
+            List<String> dependencies =
+                    entry.getValue().getDescriptor().getDependencies();
+
+            boolean dependsOnModule = dependencies.stream()
+                    .anyMatch(dependency ->
+                            dependency.equalsIgnoreCase(registeredName)
+                    );
+
+            if (dependsOnModule) {
+                throw new IllegalStateException(
+                        "Cannot unregister module '" + registeredName
+                                + "'. Module '" + dependentName + "' depends on it."
+                );
+            }
+        }
+
+        // Save and unload the module configuration.
+        ModuleContext moduleContext = contexts.get(registeredName);
+
+        if (moduleContext != null) {
+            moduleContext.getModuleConfig().unload();
+        }
+
+        // Remove module references.
+        modules.remove(registeredName);
+        states.remove(registeredName);
+        contexts.remove(registeredName);
+
+        context.getPlugin().getLogger().info(
+                "Module unregistered: " + registeredName
+        );
+    }
+
+    // =========================================================
+    // MODULE NAME RESOLUTION
+    // =========================================================
+
+    private String findRegisteredModuleName(String name) {
+
+        Objects.requireNonNull(
+                name,
+                "Module name cannot be null"
+        );
+
+        for (String registeredName : modules.keySet()) {
+
+            if (registeredName.equalsIgnoreCase(name)) {
+                return registeredName;
+            }
+        }
+
+        return null;
+    }
+
 }

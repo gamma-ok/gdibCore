@@ -1,6 +1,9 @@
 package me.gdib.core.common.animation;
 
+import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -13,47 +16,48 @@ public final class AnimationManager {
 
     public AnimationManager(SchedulerManager schedulerManager) {
         this.schedulerManager = Objects.requireNonNull(
-            schedulerManager,
-            "SchedulerManager cannot be null"
+                schedulerManager,
+                "SchedulerManager cannot be null"
         );
 
         this.animations = new LinkedHashMap<>();
     }
 
-    public void start(
+    // =========================================================
+    // ANIMATION MANAGEMENT
+    // =========================================================
+
+    public synchronized void start(
             String name,
             Runnable animation,
-            long periodTicks) {
-
+            long periodTicks
+    ) {
         validateName(name);
 
-        Objects.requireNonNull(
-            animation,
-            "Animation cannot be null"
-        );
+        Objects.requireNonNull(animation, "Animation cannot be null");
 
         if (periodTicks <= 0) {
             throw new IllegalArgumentException(
-                "Animation period must be greater than zero"
+                    "Animation period must be greater than zero"
             );
         }
 
         if (isRunning(name)) {
             throw new IllegalStateException(
-                "Animation is already running: " + name
+                    "Animation is already running: " + name
             );
         }
 
         int taskId = schedulerManager.runTimer(
-            animation,
-            0L,
-            periodTicks
+                animation,
+                0L,
+                periodTicks
         );
 
         animations.put(name, taskId);
     }
 
-    public void stop(String name) {
+    public synchronized void stop(String name) {
         validateName(name);
 
         Integer taskId = animations.remove(name);
@@ -63,7 +67,7 @@ public final class AnimationManager {
         }
     }
 
-    public boolean isRunning(String name) {
+    public synchronized boolean isRunning(String name) {
         validateName(name);
 
         Integer taskId = animations.get(name);
@@ -81,26 +85,70 @@ public final class AnimationManager {
         return active;
     }
 
-    public int getAnimationCount() {
+    // =========================================================
+    // INFORMATION
+    // =========================================================
+
+    public synchronized int getAnimationCount() {
+        removeInactiveAnimations();
+
         return animations.size();
     }
 
-    public void stopAll() {
-        for (Integer taskId : animations.values()) {
-            schedulerManager.cancelTask(taskId);
+    private void removeInactiveAnimations() {
+        Iterator<Map.Entry<String, Integer>> iterator =
+                animations.entrySet().iterator();
+
+        while (iterator.hasNext()) {
+            Map.Entry<String, Integer> entry = iterator.next();
+
+            if (!schedulerManager.isActive(entry.getValue())) {
+                iterator.remove();
+            }
+        }
+    }
+
+    // =========================================================
+    // CLEANUP
+    // =========================================================
+
+    public synchronized void stopAll() {
+        List<Integer> taskIds = new ArrayList<>(animations.values());
+
+        // Clear the registry before attempting cancellation.
+        animations.clear();
+
+        RuntimeException firstException = null;
+
+        for (Integer taskId : taskIds) {
+            try {
+                schedulerManager.cancelTask(taskId);
+            } catch (RuntimeException exception) {
+                if (firstException == null) {
+                    firstException = exception;
+                } else {
+                    firstException.addSuppressed(exception);
+                }
+            }
         }
 
-        animations.clear();
+        if (firstException != null) {
+            throw firstException;
+        }
     }
 
-    public void clear() {
+    public synchronized void clear() {
         stopAll();
     }
+
+    // =========================================================
+    // VALIDATION
+    // =========================================================
 
     private void validateName(String name) {
         if (name == null || name.trim().isEmpty()) {
             throw new IllegalArgumentException(
-                "Animation name cannot be null or empty"
+                    "Animation name cannot be null or empty"
             );
         }
     }

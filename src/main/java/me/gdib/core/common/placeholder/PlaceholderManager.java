@@ -4,7 +4,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
-
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
 public final class PlaceholderManager {
@@ -15,46 +15,65 @@ public final class PlaceholderManager {
         this.placeholders = new LinkedHashMap<>();
     }
 
-    public void register(
-            String key,
-            Function<Player, String> provider) {
+    // =========================================================
+    // PLACEHOLDER REGISTRATION
+    // =========================================================
 
+    public synchronized void register(
+            String key,
+            Function<Player, String> provider
+    ) {
         validateKey(key);
 
         Objects.requireNonNull(
-            provider,
-            "Placeholder provider cannot be null"
+                provider,
+                "Placeholder provider cannot be null"
         );
 
         if (placeholders.containsKey(key)) {
             throw new IllegalStateException(
-                "Placeholder is already registered: " + key
+                    "Placeholder is already registered: " + key
             );
         }
 
         placeholders.put(key, provider);
     }
 
-    public void unregister(String key) {
+    public synchronized void unregister(String key) {
         validateKey(key);
         placeholders.remove(key);
     }
 
-    public boolean isRegistered(String key) {
+    public synchronized boolean isRegistered(String key) {
         validateKey(key);
         return placeholders.containsKey(key);
     }
 
+    // =========================================================
+    // PLACEHOLDER PARSING
+    // =========================================================
+
     public String parse(Player player, String text) {
-        Objects.requireNonNull(
-            text,
-            "Text cannot be null"
-        );
+        Objects.requireNonNull(text, "Text cannot be null");
+
+        if (!Bukkit.isPrimaryThread()) {
+            throw new IllegalStateException(
+                    "Placeholder parsing must be executed "
+                            + "on the main server thread."
+            );
+        }
+
+        // Create a snapshot to avoid concurrent modifications.
+        Map<String, Function<Player, String>> placeholdersCopy;
+
+        synchronized (this) {
+            placeholdersCopy = new LinkedHashMap<>(placeholders);
+        }
 
         String result = text;
 
         for (Map.Entry<String, Function<Player, String>> entry
-                : placeholders.entrySet()) {
+                : placeholdersCopy.entrySet()) {
 
             String placeholder = "%" + entry.getKey() + "%";
 
@@ -63,9 +82,9 @@ public final class PlaceholderManager {
             }
 
             String value = Objects.requireNonNull(
-                entry.getValue().apply(player),
-                "Placeholder provider returned null: "
-                    + entry.getKey()
+                    entry.getValue().apply(player),
+                    "Placeholder provider returned null: "
+                            + entry.getKey()
             );
 
             result = result.replace(placeholder, value);
@@ -74,24 +93,36 @@ public final class PlaceholderManager {
         return result;
     }
 
-    public int getPlaceholderCount() {
+    // =========================================================
+    // INFORMATION
+    // =========================================================
+
+    public synchronized int getPlaceholderCount() {
         return placeholders.size();
     }
 
-    public void clear() {
+    // =========================================================
+    // CLEANUP
+    // =========================================================
+
+    public synchronized void clear() {
         placeholders.clear();
     }
+
+    // =========================================================
+    // VALIDATION
+    // =========================================================
 
     private void validateKey(String key) {
         if (key == null || key.trim().isEmpty()) {
             throw new IllegalArgumentException(
-                "Placeholder key cannot be null or empty"
+                    "Placeholder key cannot be null or empty"
             );
         }
 
         if (!key.matches("[a-zA-Z0-9_.-]+")) {
             throw new IllegalArgumentException(
-                "Invalid placeholder key: " + key
+                    "Invalid placeholder key: " + key
             );
         }
     }

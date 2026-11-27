@@ -26,204 +26,327 @@ import me.gdib.core.common.text.TextFormatter;
 
 public final class CoreContext {
 
-	private final JavaPlugin plugin;
+    private final JavaPlugin plugin;
 
-	private final ServiceRegistry serviceRegistry;
+    private final ServiceRegistry serviceRegistry;
 
-	private final ModuleManager moduleManager;
+    private final ModuleManager moduleManager;
 
-	private boolean shutdown;
+    private volatile boolean shutdown;
 
-	public CoreContext(JavaPlugin plugin) {
+    public CoreContext(JavaPlugin plugin) {
 
-		this.plugin = Objects.requireNonNull(plugin, "Plugin cannot be null");
+        this.plugin = Objects.requireNonNull(
+                plugin,
+                "Plugin cannot be null"
+        );
 
-		this.serviceRegistry = new ServiceRegistry();
+        this.serviceRegistry = new ServiceRegistry();
 
-		initializeServices();
+        initializeServices();
 
-		// Initialize module manager after shared services.
-		this.moduleManager = new ModuleManager(this);
-	}
+        // Initialize module manager after shared services.
+        this.moduleManager = new ModuleManager(this);
+    }
 
-	private void initializeServices() {
+    // =========================================================
+    // SERVICE INITIALIZATION
+    // =========================================================
 
-		// Event system
-		EventBus eventBus = new EventBus(plugin);
-		registerService(EventBus.class, eventBus);
+    private void initializeServices() {
 
-		// Scheduler system
-		SchedulerManager schedulerManager = new SchedulerManager(plugin);
-		registerService(SchedulerManager.class, schedulerManager);
+        // Event system
+        EventBus eventBus = new EventBus(plugin);
+        registerService(EventBus.class, eventBus);
 
-		// Animation system
-		AnimationManager animationManager = new AnimationManager(schedulerManager);
-		registerService(AnimationManager.class, animationManager);
+        // Scheduler system
+        SchedulerManager schedulerManager = new SchedulerManager(plugin);
+        registerService(SchedulerManager.class, schedulerManager);
 
-		// Configuration system
-		ConfigManager configManager = new ConfigManager(plugin);
-		registerService(ConfigManager.class, configManager);
+        // Animation system
+        AnimationManager animationManager = new AnimationManager(schedulerManager);
+        registerService(AnimationManager.class, animationManager);
 
-		CoreConfig coreConfig = new CoreConfig(configManager);
-		registerService(CoreConfig.class, coreConfig);
+        // Configuration system
+        ConfigManager configManager = new ConfigManager(plugin);
+        registerService(ConfigManager.class, configManager);
 
-		// Storage system
-		StorageConfig storageConfig = new StorageConfig(configManager);
-		registerService(StorageConfig.class, storageConfig);
+        CoreConfig coreConfig = new CoreConfig(configManager);
+        registerService(CoreConfig.class, coreConfig);
 
-		StorageManager storageManager = StorageInitializer.initialize(plugin, storageConfig);
-		registerService(StorageManager.class, storageManager);
+        // Storage system
+        StorageConfig storageConfig = new StorageConfig(configManager);
+        registerService(StorageConfig.class, storageConfig);
 
-		// Message system
-		MessageManager messageManager = new MessageManager(coreConfig);
-		registerService(MessageManager.class, messageManager);
+        StorageManager storageManager =
+                StorageInitializer.initialize(plugin, storageConfig);
 
-		// Command system
-		CommandManager commandManager = new CommandManager(plugin);
-		registerService(CommandManager.class, commandManager);
+        registerService(StorageManager.class, storageManager);
 
-		// Permission system
-		PermissionManager permissionManager = new PermissionManager(coreConfig);
-		registerService(PermissionManager.class, permissionManager);
+        // Message system
+        MessageManager messageManager = new MessageManager(coreConfig);
+        registerService(MessageManager.class, messageManager);
 
-		// Cooldown system
-		CooldownManager cooldownManager = new CooldownManager();
-		registerService(CooldownManager.class, cooldownManager);
+        // Command system
+        CommandManager commandManager = new CommandManager(plugin);
+        registerService(CommandManager.class, commandManager);
 
-		// Placeholder system
-		PlaceholderManager placeholderManager = new PlaceholderManager();
-		registerService(PlaceholderManager.class, placeholderManager);
+        // Permission system
+        PermissionManager permissionManager =
+                new PermissionManager(coreConfig);
 
-		// Player system
-		PlayerManager playerManager = new PlayerManager();
-		registerService(PlayerManager.class, playerManager);
+        registerService(PermissionManager.class, permissionManager);
 
-		// Text formatting system
-		TextFormatter textFormatter = new TextFormatter();
-		registerService(TextFormatter.class, textFormatter);
-	}
+        // Cooldown system
+        CooldownManager cooldownManager = new CooldownManager();
+        registerService(CooldownManager.class, cooldownManager);
 
-	public JavaPlugin getPlugin() {
-		return plugin;
-	}
+        // Placeholder system
+        PlaceholderManager placeholderManager = new PlaceholderManager();
+        registerService(PlaceholderManager.class, placeholderManager);
 
-	public ServiceRegistry getServiceRegistry() {
-		return serviceRegistry;
-	}
+        // Player system
+        PlayerManager playerManager = new PlayerManager();
+        registerService(PlayerManager.class, playerManager);
 
-	public ModuleManager getModuleManager() {
-		return moduleManager;
-	}
+        // Text formatting system
+        TextFormatter textFormatter = new TextFormatter();
+        registerService(TextFormatter.class, textFormatter);
+    }
 
-	public <T> void registerService(Class<T> type, T service) {
-		serviceRegistry.register(type, service);
-	}
+    // =========================================================
+    // CORE ACCESS
+    // =========================================================
 
-	public <T> T getService(Class<T> type) {
-		return serviceRegistry.get(type);
-	}
+    public JavaPlugin getPlugin() {
+        return plugin;
+    }
 
-	public <T> Optional<T> getOptionalService(Class<T> type) {
-		return serviceRegistry.getOptional(type);
-	}
+    public ServiceRegistry getServiceRegistry() {
+        return serviceRegistry;
+    }
 
-	public void shutdown() {
+    public ModuleManager getModuleManager() {
+        return moduleManager;
+    }
+
+    // =========================================================
+    // CONFIGURATION MANAGEMENT
+    // =========================================================
+
+    public void reloadConfigurations() {
+
+        if (shutdown) {
+            throw new IllegalStateException(
+                    "Cannot reload configurations after shutdown"
+            );
+        }
+
+        // Retrieve configuration services.
+        ConfigManager configManager = getService(ConfigManager.class);
+
+        CoreConfig coreConfig = getService(CoreConfig.class);
+
+        StorageConfig storageConfig = getService(StorageConfig.class);
+
+        // Reload configuration file from disk.
+        configManager.reloadConfig("config.yml");
+
+        // Validate and update storage configuration.
+        storageConfig.load();
+
+        // Update core configuration reference.
+        coreConfig.load();
+
+        plugin.getLogger().info(
+                "Configurations reloaded successfully."
+        );
+    }
+
+    // =========================================================
+    // SERVICE REGISTRY ACCESS
+    // =========================================================
+
+    public <T> void registerService(Class<T> type, T service) {
+        serviceRegistry.register(type, service);
+    }
+
+    public <T> T getService(Class<T> type) {
+        return serviceRegistry.get(type);
+    }
+
+    public <T> Optional<T> getOptionalService(Class<T> type) {
+        return serviceRegistry.getOptional(type);
+    }
+
+    // =========================================================
+    // SHUTDOWN
+    // =========================================================
+
+    public void shutdown() {
+
+        // Prevent multiple shutdown executions.
+        if (shutdown) {
+            return;
+        }
+
+        shutdown = true;
+
+        plugin.getLogger().info(
+                "Starting gdibCore shutdown..."
+        );
+
+        // 1. Disable all modules.
+        executeShutdownStep(
+                "Disabling modules",
+                () -> moduleManager.disableAll()
+        );
+
+        // 2. Clear registered commands.
+        executeShutdownStep(
+                "Clearing registered commands",
+                () -> getOptionalService(CommandManager.class)
+                        .ifPresent(CommandManager::clear)
+        );
+
+        // 3. Stop animations.
+        executeShutdownStep(
+                "Stopping animations",
+                () -> getOptionalService(AnimationManager.class)
+                        .ifPresent(AnimationManager::stopAll)
+        );
+
+        // 4. Cancel scheduled tasks.
+        executeShutdownStep(
+                "Cancelling scheduled tasks",
+                () -> getOptionalService(SchedulerManager.class)
+                        .ifPresent(SchedulerManager::cancelAll)
+        );
+
+        // 5. Clear event listeners.
+        executeShutdownStep(
+                "Clearing event listeners",
+                () -> getOptionalService(EventBus.class)
+                        .ifPresent(EventBus::clear)
+        );
+
+        // 6. Close storage.
+        executeShutdownStep(
+                "Initiating storage shutdown",
+                this::shutdownStorage
+        );
+
+        // 7. Clear temporary data.
+        executeShutdownStep(
+                "Clearing cooldowns",
+                () -> getOptionalService(CooldownManager.class)
+                        .ifPresent(CooldownManager::clear)
+        );
+
+        executeShutdownStep(
+                "Clearing placeholders",
+                () -> getOptionalService(PlaceholderManager.class)
+                        .ifPresent(PlaceholderManager::clear)
+        );
+
+        // 8. Save configurations.
+        executeShutdownStep(
+                "Saving configurations",
+                () -> getOptionalService(ConfigManager.class)
+                        .ifPresent(ConfigManager::saveAll)
+        );
+
+        // 9. Unload configurations.
+        executeShutdownStep(
+                "Unloading configurations",
+                () -> getOptionalService(ConfigManager.class)
+                        .ifPresent(ConfigManager::unloadAll)
+        );
+
+        // 10. Clear service registry.
+        executeShutdownStep(
+                "Clearing service registry",
+                () -> serviceRegistry.clear()
+        );
+
+        plugin.getLogger().info(
+                "gdibCore shutdown process completed."
+        );
+    }
+
+    // =========================================================
+    // STORAGE SHUTDOWN
+    // =========================================================
+
+    private void shutdownStorage() {
+
+        Optional<StorageManager> storage =
+                getOptionalService(StorageManager.class);
+
+        if (!storage.isPresent()) {
+            return;
+        }
+
+        try {
+
+            storage.get()
+                    .shutdown()
+                    .get(10, TimeUnit.SECONDS);
+
+            plugin.getLogger().info(
+                    "Storage provider closed successfully."
+            );
+
+        } catch (InterruptedException exception) {
+
+            Thread.currentThread().interrupt();
+
+            throw new IllegalStateException(
+                    "Storage shutdown was interrupted.",
+                    exception
+            );
+
+        } catch (ExecutionException exception) {
+
+            throw new IllegalStateException(
+                    "Failed to close storage provider.",
+                    exception.getCause()
+            );
+
+        } catch (TimeoutException exception) {
+
+            throw new IllegalStateException(
+                    "Storage shutdown timed out after 10 seconds.",
+                    exception
+            );
+        }
+    }
+
+    // =========================================================
+    // SHUTDOWN STEP EXECUTION
+    // =========================================================
+
+    private void executeShutdownStep(
+            String operation,
+            Runnable action
+    ) {
+
+        try {
+
+            action.run();
+
+            plugin.getLogger().info(
+                    operation + " completed."
+            );
+
+        } catch (Exception exception) {
+
+            plugin.getLogger().severe(
+                    operation + " failed: " + exception.getMessage()
+            );
+
+            exception.printStackTrace();
+        }
+    }
 
-		// Prevent multiple shutdown executions.
-		if (shutdown) {
-			return;
-		}
-
-		shutdown = true;
-
-		plugin.getLogger().info("Starting gdibCore shutdown...");
-
-		// 1. Disable all modules.
-		executeShutdownStep("Disabling modules", () -> moduleManager.disableAll());
-
-		// 2. Clear registered commands.
-		executeShutdownStep("Clearing registered commands",
-				() -> getOptionalService(CommandManager.class).ifPresent(CommandManager::clear));
-
-		// 3. Initiate storage shutdown.
-		executeShutdownStep("Initiating storage shutdown", this::shutdownStorage);
-
-		// 4. Stop animations.
-		executeShutdownStep("Stopping animations",
-				() -> getOptionalService(AnimationManager.class).ifPresent(AnimationManager::stopAll));
-
-		// 5. Cancel scheduled tasks.
-		executeShutdownStep("Cancelling scheduled tasks",
-				() -> getOptionalService(SchedulerManager.class).ifPresent(SchedulerManager::cancelAll));
-
-		// 6. Clear event listeners.
-		executeShutdownStep("Clearing event listeners",
-				() -> getOptionalService(EventBus.class).ifPresent(EventBus::clear));
-
-		// 7. Clear temporary data.
-		executeShutdownStep("Clearing cooldowns",
-				() -> getOptionalService(CooldownManager.class).ifPresent(CooldownManager::clear));
-
-		executeShutdownStep("Clearing placeholders",
-				() -> getOptionalService(PlaceholderManager.class).ifPresent(PlaceholderManager::clear));
-
-		// 8. Save configurations.
-		executeShutdownStep("Saving configurations",
-				() -> getOptionalService(ConfigManager.class).ifPresent(ConfigManager::saveAll));
-
-		// 9. Unload configurations.
-		executeShutdownStep("Unloading configurations",
-				() -> getOptionalService(ConfigManager.class).ifPresent(ConfigManager::unloadAll));
-
-		// 10. Clear service registry.
-		executeShutdownStep("Clearing service registry", () -> serviceRegistry.clear());
-
-		plugin.getLogger().info("gdibCore shutdown process completed.");
-	}
-
-	private void shutdownStorage() {
-
-		Optional<StorageManager> storage = getOptionalService(StorageManager.class);
-
-		if (!storage.isPresent()) {
-			return;
-		}
-
-		try {
-
-			storage.get().shutdown().get(10, TimeUnit.SECONDS);
-
-			plugin.getLogger().info("Storage provider closed successfully.");
-
-		} catch (InterruptedException exception) {
-
-			Thread.currentThread().interrupt();
-
-			throw new IllegalStateException("Storage shutdown was interrupted.", exception);
-
-		} catch (ExecutionException exception) {
-
-			throw new IllegalStateException("Failed to close storage provider.", exception.getCause());
-
-		} catch (TimeoutException exception) {
-
-			throw new IllegalStateException("Storage shutdown timed out after 10 seconds.", exception);
-		}
-	}
-
-	private void executeShutdownStep(String operation, Runnable action) {
-
-		try {
-
-			action.run();
-
-			plugin.getLogger().info(operation + " completed.");
-
-		} catch (Exception exception) {
-
-			plugin.getLogger().severe(operation + " failed: " + exception.getMessage());
-
-			exception.printStackTrace();
-		}
-	}
 }

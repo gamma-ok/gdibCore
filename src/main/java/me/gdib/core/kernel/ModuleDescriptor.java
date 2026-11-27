@@ -7,70 +7,103 @@ import java.util.Objects;
 
 public final class ModuleDescriptor {
 
-	private final String name;
-	private final String description;
-	private final List<String> dependencies;
-	private final boolean enabledByDefault;
+    private final String name;
+    private final String description;
+    private final List<String> dependencies;
+    private final boolean enabledByDefault;
 
-	public ModuleDescriptor(String name, String description, List<String> dependencies, boolean enabledByDefault) {
+    public ModuleDescriptor(
+            String name,
+            String description,
+            List<String> dependencies,
+            boolean enabledByDefault
+    ) {
+        this.name = validateName(name);
 
-		this.name = validateName(name);
+        this.description = Objects.requireNonNull(
+                description,
+                "Module description cannot be null"
+        );
 
-		this.description = Objects.requireNonNull(description, "Module description cannot be null");
+        Objects.requireNonNull(
+                dependencies,
+                "Module dependencies cannot be null"
+        );
 
-		Objects.requireNonNull(dependencies, "Module dependencies cannot be null");
+        List<String> validatedDependencies = new ArrayList<>();
 
-		List<String> validatedDependencies = new ArrayList<>();
+        for (String dependency : dependencies) {
 
-		for (String dependency : dependencies) {
+            String validatedName = validateName(dependency);
 
-			String validatedName = validateName(dependency);
+            if (validatedName.equalsIgnoreCase(this.name)) {
+                throw new IllegalArgumentException(
+                        "A module cannot depend on itself: " + this.name
+                );
+            }
 
-			if (validatedName.equalsIgnoreCase(this.name)) {
-				throw new IllegalArgumentException("A module cannot depend on itself: " + this.name);
-			}
+            boolean alreadyExists = validatedDependencies.stream()
+                    .anyMatch(existing ->
+                            existing.equalsIgnoreCase(validatedName)
+                    );
 
-			if (validatedDependencies.contains(validatedName)) {
-				throw new IllegalArgumentException("Duplicate module dependency: " + validatedName);
-			}
+            if (alreadyExists) {
+                throw new IllegalArgumentException(
+                        "Duplicate module dependency: " + validatedName
+                );
+            }
 
-			validatedDependencies.add(validatedName);
-		}
+            validatedDependencies.add(validatedName);
+        }
 
-		this.dependencies = Collections.unmodifiableList(validatedDependencies);
+        this.dependencies = Collections.unmodifiableList(
+                validatedDependencies
+        );
 
-		this.enabledByDefault = enabledByDefault;
-	}
+        this.enabledByDefault = enabledByDefault;
+    }
 
-	public String getName() {
-		return name;
-	}
+    // =========================================================
+    // MODULE INFORMATION
+    // =========================================================
 
-	public String getDescription() {
-		return description;
-	}
+    public String getName() {
+        return name;
+    }
 
-	public List<String> getDependencies() {
-		return dependencies;
-	}
+    public String getDescription() {
+        return description;
+    }
 
-	public boolean isEnabledByDefault() {
-		return enabledByDefault;
-	}
+    public List<String> getDependencies() {
+        return dependencies;
+    }
 
-	private String validateName(String name) {
+    public boolean isEnabledByDefault() {
+        return enabledByDefault;
+    }
 
-		if (name == null || name.trim().isEmpty()) {
-			throw new IllegalArgumentException("Module name cannot be null or empty");
-		}
+    // =========================================================
+    // VALIDATION
+    // =========================================================
 
-		String validatedName = name.trim();
+    private String validateName(String name) {
+        if (name == null || name.trim().isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Module name cannot be null or empty"
+            );
+        }
 
-		if (!validatedName.matches("[a-zA-Z0-9_-]+")) {
-			throw new IllegalArgumentException("Invalid module name: " + validatedName
-					+ ". Only letters, numbers, underscores and hyphens are allowed.");
-		}
+        String validatedName = name.trim();
 
-		return validatedName;
-	}
+        if (!validatedName.matches("[a-zA-Z0-9_-]+")) {
+            throw new IllegalArgumentException(
+                    "Invalid module name: " + validatedName
+                            + ". Only letters, numbers, underscores "
+                            + "and hyphens are allowed."
+            );
+        }
+
+        return validatedName;
+    }
 }

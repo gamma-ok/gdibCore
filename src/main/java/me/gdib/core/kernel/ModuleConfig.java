@@ -1,5 +1,6 @@
 package me.gdib.core.kernel;
 
+import java.util.Locale;
 import java.util.Objects;
 
 import org.bukkit.configuration.file.FileConfiguration;
@@ -8,49 +9,79 @@ import me.gdib.core.common.config.ConfigManager;
 
 public final class ModuleConfig {
 
-	private final String moduleName;
-	private final ConfigManager configManager;
-	private final String fileName;
+    private final String moduleName;
+    private final ConfigManager configManager;
+    private final String fileName;
 
-	public ModuleConfig(String moduleName, ConfigManager configManager) {
+    public ModuleConfig(String moduleName, ConfigManager configManager) {
 
-		this.moduleName = Objects.requireNonNull(moduleName, "Module name cannot be null");
+        Objects.requireNonNull(
+                moduleName,
+                "Module name cannot be null"
+        );
 
-		this.configManager = Objects.requireNonNull(configManager, "ConfigManager cannot be null");
+        this.configManager = Objects.requireNonNull(
+                configManager,
+                "ConfigManager cannot be null"
+        );
 
-		this.fileName = "modules/" + moduleName.toLowerCase() + "/config.yml";
-	}
+        String validatedName = moduleName.trim();
 
-	public FileConfiguration getConfig() {
-		return configManager.loadConfig(fileName);
-	}
+        if (!validatedName.matches("[a-zA-Z0-9_-]+")) {
+            throw new IllegalArgumentException(
+                    "Invalid module name: " + moduleName
+            );
+        }
 
-	public void save() {
-		configManager.saveConfig(fileName);
-	}
+        this.moduleName = validatedName;
 
-	public void reload() {
-		configManager.reloadConfig(fileName);
-	}
+        this.fileName = "modules/"
+                + validatedName.toLowerCase(Locale.ROOT)
+                + "/config.yml";
+    }
 
-	public String getModuleName() {
-		return moduleName;
-	}
+    // =========================================================
+    // CONFIGURATION ACCESS
+    // =========================================================
 
-	public String getFileName() {
-		return fileName;
-	}
+    public FileConfiguration getConfig() {
+        return configManager.loadConfig(fileName);
+    }
 
-	public void unload() {
+    public void save() {
+        configManager.saveConfig(fileName);
+    }
 
-		if (!configManager.isLoaded(fileName)) {
-			return;
-		}
+    public void reload() {
+        configManager.reloadConfig(fileName);
+    }
 
-		// Save the configuration before unloading it.
-		configManager.saveConfig(fileName);
+    // =========================================================
+    // MODULE INFORMATION
+    // =========================================================
 
-		// Remove the configuration from memory.
-		configManager.unloadConfig(fileName);
-	}
+    public String getModuleName() {
+        return moduleName;
+    }
+
+    public String getFileName() {
+        return fileName;
+    }
+
+    // =========================================================
+    // CONFIGURATION CLEANUP
+    // =========================================================
+
+    public void unload() {
+
+        if (!configManager.isLoaded(fileName)) {
+            return;
+        }
+
+        // Save the configuration before unloading it.
+        configManager.saveConfig(fileName);
+
+        // Remove the configuration from memory.
+        configManager.unloadConfig(fileName);
+    }
 }

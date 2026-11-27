@@ -2,59 +2,56 @@ package me.gdib.core.common.text;
 
 import java.util.Map;
 import java.util.Objects;
-
 import org.bukkit.ChatColor;
 
 public final class TextFormatter {
 
+    // =========================================================
+    // COLOR FORMATTING
+    // =========================================================
+
     public String colorize(String text) {
-        Objects.requireNonNull(
-            text,
-            "Text cannot be null"
-        );
+        Objects.requireNonNull(text, "Text cannot be null");
 
         return ChatColor.translateAlternateColorCodes('&', text);
     }
 
     public String stripColors(String text) {
-        Objects.requireNonNull(
-            text,
-            "Text cannot be null"
-        );
+        Objects.requireNonNull(text, "Text cannot be null");
 
-        return ChatColor.stripColor(
-            colorize(text)
-        );
+        return ChatColor.stripColor(colorize(text));
     }
+
+    // =========================================================
+    // TEXT REPLACEMENT
+    // =========================================================
 
     public String replace(
             String text,
-            Map<String, String> replacements) {
-
-        Objects.requireNonNull(
-            text,
-            "Text cannot be null"
-        );
-
-        Objects.requireNonNull(
-            replacements,
-            "Replacements cannot be null"
-        );
+            Map<String, String> replacements
+    ) {
+        Objects.requireNonNull(text, "Text cannot be null");
+        Objects.requireNonNull(replacements, "Replacements cannot be null");
 
         String result = text;
 
-        for (Map.Entry<String, String> entry
-                : replacements.entrySet()) {
+        for (Map.Entry<String, String> entry : replacements.entrySet()) {
 
             String placeholder = Objects.requireNonNull(
-                entry.getKey(),
-                "Placeholder cannot be null"
+                    entry.getKey(),
+                    "Placeholder cannot be null"
             );
 
             String value = Objects.requireNonNull(
-                entry.getValue(),
-                "Replacement value cannot be null"
+                    entry.getValue(),
+                    "Replacement value cannot be null"
             );
+
+            if (placeholder.isEmpty()) {
+                throw new IllegalArgumentException(
+                        "Placeholder cannot be empty"
+                );
+            }
 
             result = result.replace(placeholder, value);
         }
@@ -62,16 +59,18 @@ public final class TextFormatter {
         return result;
     }
 
+    // =========================================================
+    // GENERAL FORMATTING
+    // =========================================================
+
     public String format(String text) {
         return colorize(text);
     }
 
     public String format(
             String text,
-            Map<String, String> replacements) {
-
-        return colorize(
-            replace(text, replacements)
-        );
+            Map<String, String> replacements
+    ) {
+        return colorize(replace(text, replacements));
     }
 }
