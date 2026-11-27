@@ -10,3 +10,17 @@ settings:
 messages:
   # General prefix used by gdibCore.
   prefix: "&b&lGD&f&lIB &8» &7"
+
+storage:
+  type: SQLITE
+
+  sqlite:
+    file: database.db
+
+  mysql:
+    host: localhost
+    port: 3306
+    database: gdibcore
+    username: root
+    password: ""
+    useSSL: false

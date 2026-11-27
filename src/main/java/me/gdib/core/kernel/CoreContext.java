@@ -2,9 +2,7 @@ package me.gdib.core.kernel;
 
 import java.util.Objects;
 import java.util.Optional;
-
 import org.bukkit.plugin.java.JavaPlugin;
-
 import me.gdib.core.common.animation.AnimationManager;
 import me.gdib.core.common.config.ConfigManager;
 import me.gdib.core.common.cooldown.CooldownManager;
@@ -15,6 +13,9 @@ import me.gdib.core.common.scheduler.SchedulerManager;
 import me.gdib.core.common.text.TextFormatter;
 import me.gdib.core.common.config.CoreConfig;
 import me.gdib.core.common.message.MessageManager;
+import me.gdib.core.common.storage.StorageConfig;
+import me.gdib.core.common.storage.StorageInitializer;
+import me.gdib.core.common.storage.StorageManager;
 
 public final class CoreContext {
 
@@ -54,6 +55,15 @@ public final class CoreContext {
 
 		CoreConfig coreConfig = new CoreConfig(configManager);
 		registerService(CoreConfig.class, coreConfig);
+
+		// Storage system
+		StorageConfig storageConfig = new StorageConfig(configManager);
+		registerService(StorageConfig.class, storageConfig);
+
+		StorageManager storageManager =
+				StorageInitializer.initialize(plugin, storageConfig);
+
+		registerService(StorageManager.class, storageManager);
 
 		// Message system
 		MessageManager messageManager = new MessageManager(coreConfig.getPrefix());
@@ -114,6 +124,9 @@ public final class CoreContext {
 		// 1. Disable all modules.
 		executeShutdownStep("Disabling modules", () -> moduleManager.disableAll());
 
+		executeShutdownStep("Initiating storage shutdown",
+				this::shutdownStorage);
+
 		// 2. Stop animations.
 		executeShutdownStep("Stopping animations",
 				() -> getOptionalService(AnimationManager.class).ifPresent(AnimationManager::stopAll));
@@ -145,6 +158,35 @@ public final class CoreContext {
 		executeShutdownStep("Clearing service registry", () -> serviceRegistry.clear());
 
 		plugin.getLogger().info("gdibCore shutdown process completed.");
+	}
+
+	private void shutdownStorage() {
+
+		Optional<StorageManager> storage =
+				getOptionalService(StorageManager.class);
+
+		if (!storage.isPresent()) {
+			return;
+		}
+
+		storage.get().shutdown().whenComplete((result, exception) -> {
+
+			if (exception != null) {
+
+				plugin.getLogger().severe(
+						"Failed to close storage provider: "
+								+ exception.getMessage()
+				);
+
+				exception.printStackTrace();
+
+			} else {
+
+				plugin.getLogger().info(
+						"Storage provider closed successfully."
+				);
+			}
+		});
 	}
 
 	private void executeShutdownStep(String operation, Runnable action) {
