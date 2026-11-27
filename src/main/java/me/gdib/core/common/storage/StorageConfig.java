@@ -33,8 +33,10 @@ public final class StorageConfig {
 
     public void load() {
 
-        FileConfiguration config =
-            configManager.loadConfig("config.yml");
+        FileConfiguration config = Objects.requireNonNull(
+            configManager.loadConfig("config.yml"),
+            "Configuration cannot be null"
+        );
 
         loadValues(config);
     }
@@ -43,94 +45,125 @@ public final class StorageConfig {
 
         configManager.reloadConfig("config.yml");
 
-        FileConfiguration config =
-            configManager.getConfig("config.yml");
+        FileConfiguration config = Objects.requireNonNull(
+            configManager.getConfig("config.yml"),
+            "Configuration cannot be null"
+        );
 
         loadValues(config);
     }
 
     private void loadValues(FileConfiguration config) {
 
-        // Storage type.
-        this.type = StorageType.fromString(
+        Objects.requireNonNull(
+            config,
+            "Configuration cannot be null"
+        );
+
+        // Read storage type.
+        StorageType newType = StorageType.fromString(
             config.getString("storage.type", "SQLITE")
         );
 
-        // SQLite configuration.
-        this.sqliteFile = config.getString(
+        // Read SQLite configuration.
+        String newSQLiteFile = config.getString(
             "storage.sqlite.file",
             "database.db"
         );
 
-        if (sqliteFile == null || sqliteFile.trim().isEmpty()) {
-            throw new IllegalArgumentException(
-                "SQLite database file cannot be empty"
-            );
-        }
-
-        // MySQL configuration.
-        this.mysqlHost = config.getString(
+        // Read MySQL configuration.
+        String newMySQLHost = config.getString(
             "storage.mysql.host",
             "localhost"
         );
 
-        this.mysqlPort = config.getInt(
+        int newMySQLPort = config.getInt(
             "storage.mysql.port",
             3306
         );
 
-        this.mysqlDatabase = config.getString(
+        String newMySQLDatabase = config.getString(
             "storage.mysql.database",
             "gdibcore"
         );
 
-        this.mysqlUsername = config.getString(
+        String newMySQLUsername = config.getString(
             "storage.mysql.username",
             "root"
         );
 
-        this.mysqlPassword = config.getString(
+        String newMySQLPassword = config.getString(
             "storage.mysql.password",
             ""
         );
 
-        this.mysqlUseSSL = config.getBoolean(
+        boolean newMySQLUseSSL = config.getBoolean(
             "storage.mysql.useSSL",
             false
         );
 
-        validateMySQLConfiguration();
+        // Validate values before modifying current state.
+        validateSQLiteConfiguration(newSQLiteFile);
+
+        validateMySQLConfiguration(
+            newType,
+            newMySQLHost,
+            newMySQLPort,
+            newMySQLDatabase,
+            newMySQLUsername
+        );
+
+        // Apply configuration only after successful validation.
+        this.type = newType;
+        this.sqliteFile = newSQLiteFile;
+
+        this.mysqlHost = newMySQLHost;
+        this.mysqlPort = newMySQLPort;
+        this.mysqlDatabase = newMySQLDatabase;
+        this.mysqlUsername = newMySQLUsername;
+        this.mysqlPassword = newMySQLPassword;
+        this.mysqlUseSSL = newMySQLUseSSL;
     }
 
-    private void validateMySQLConfiguration() {
+    private void validateSQLiteConfiguration(String file) {
+
+        if (file == null || file.trim().isEmpty()) {
+            throw new IllegalArgumentException(
+                "SQLite database file cannot be empty"
+            );
+        }
+    }
+
+    private void validateMySQLConfiguration(
+            StorageType type,
+            String host,
+            int port,
+            String database,
+            String username) {
 
         if (type != StorageType.MYSQL) {
             return;
         }
 
-        if (mysqlHost == null || mysqlHost.trim().isEmpty()) {
+        if (host == null || host.trim().isEmpty()) {
             throw new IllegalArgumentException(
                 "MySQL host cannot be empty"
             );
         }
 
-        if (mysqlPort < 1 || mysqlPort > 65535) {
+        if (port < 1 || port > 65535) {
             throw new IllegalArgumentException(
                 "MySQL port must be between 1 and 65535"
             );
         }
 
-        if (mysqlDatabase == null
-                || mysqlDatabase.trim().isEmpty()) {
-
+        if (database == null || database.trim().isEmpty()) {
             throw new IllegalArgumentException(
                 "MySQL database cannot be empty"
             );
         }
 
-        if (mysqlUsername == null
-                || mysqlUsername.trim().isEmpty()) {
-
+        if (username == null || username.trim().isEmpty()) {
             throw new IllegalArgumentException(
                 "MySQL username cannot be empty"
             );

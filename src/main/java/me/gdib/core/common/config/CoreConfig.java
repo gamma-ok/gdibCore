@@ -20,12 +20,21 @@ public final class CoreConfig {
     }
 
     public void load() {
-        this.configuration = configManager.loadConfig("config.yml");
+
+        this.configuration = Objects.requireNonNull(
+            configManager.loadConfig("config.yml"),
+            "Configuration cannot be null"
+        );
     }
 
     public void reload() {
+
         configManager.reloadConfig("config.yml");
-        this.configuration = configManager.getConfig("config.yml");
+
+        this.configuration = Objects.requireNonNull(
+            configManager.getConfig("config.yml"),
+            "Configuration cannot be null"
+        );
     }
 
     public void save() {
@@ -33,13 +42,23 @@ public final class CoreConfig {
     }
 
     public String getPrefix() {
+
         return configuration.getString(
             "messages.prefix",
-            "&b&lGDIB &8» &7"
+            "&b&lGD&f&lIB &8» &7"
+        );
+    }
+
+    public String getNoPermissionMessage() {
+
+        return configuration.getString(
+            "messages.no-permission",
+            "&cYou do not have permission to execute this action."
         );
     }
 
     public boolean isDebugEnabled() {
+
         return configuration.getBoolean(
             "settings.debug",
             false

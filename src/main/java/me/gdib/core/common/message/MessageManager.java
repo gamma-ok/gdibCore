@@ -6,16 +6,16 @@ import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 
+import me.gdib.core.common.config.CoreConfig;
+
 public final class MessageManager {
 
-    private final String prefix;
+    private final CoreConfig coreConfig;
 
-    public MessageManager(String prefix) {
-        this.prefix = format(
-            Objects.requireNonNull(
-                prefix,
-                "Prefix cannot be null"
-            )
+    public MessageManager(CoreConfig coreConfig) {
+        this.coreConfig = Objects.requireNonNull(
+            coreConfig,
+            "CoreConfig cannot be null"
         );
     }
 
@@ -32,7 +32,7 @@ public final class MessageManager {
     }
 
     public String getPrefix() {
-        return prefix;
+        return format(coreConfig.getPrefix());
     }
 
     public void send(Player player, String message) {
@@ -50,7 +50,9 @@ public final class MessageManager {
             "Player cannot be null"
         );
 
-        player.sendMessage(prefix + " " + format(message));
+        player.sendMessage(
+            getPrefix() + " " + format(message)
+        );
     }
 
     public void broadcast(String message) {
@@ -59,7 +61,7 @@ public final class MessageManager {
 
     public void broadcastPrefixed(String message) {
         Bukkit.broadcastMessage(
-            prefix + " " + format(message)
+            getPrefix() + " " + format(message)
         );
     }
 }

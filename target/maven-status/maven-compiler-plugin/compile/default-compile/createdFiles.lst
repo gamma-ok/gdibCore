@@ -1,5 +1,6 @@
 me\gdib\core\kernel\event\ModuleStateChangeEvent.class
 me\gdib\core\common\placeholder\PlaceholderManager.class
+me\gdib\core\common\permission\PermissionManager.class
 me\gdib\core\common\cooldown\CooldownManager.class
 me\gdib\core\common\storage\StorageType.class
 me\gdib\core\common\text\TextFormatter.class
